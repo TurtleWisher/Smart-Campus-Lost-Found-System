@@ -75,9 +75,13 @@ const authRoutes = require('./routes/authRoutes');
 // Example: POST /api/auth/login
 app.use('/api/auth', authRoutes);
 
+// Lost items feature
 const lostRoutes = require('./routes/lostRoutes');
 app.use('/api/lost-items', lostRoutes);
 
+// Found items feature
+const foundRoutes = require('./routes/foundRoutes');
+app.use('/api/found-items', foundRoutes);
 // =============================================
 // START THE SERVER
 // =============================================
