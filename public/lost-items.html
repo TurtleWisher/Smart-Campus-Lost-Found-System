@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lost Items | BRACU Lost & Found</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .item-card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+
+        .item-card:hover {
+            transform: translateY(-3px);
+        }
+
+        .page-header {
+            background: linear-gradient(135deg, #dc3545, #fd7e14);
+            color: white;
+            padding: 40px 0;
+        }
+
+        .form-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+            padding: 28px;
+            margin-bottom: 32px;
+        }
+
+        .badge-status {
+            font-size: 0.75rem;
+            padding: 5px 10px;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="navbar-container"></div>
+
+    <!-- PAGE HEADER -->
+    <div class="page-header">
+        <div class="container">
+            <h2 class="fw-bold mb-1"> Lost Items</h2>
+            <p class="mb-0 opacity-75">
+                Browse all reported lost items on campus
+            </p>
+        </div>
+    </div>
+
+    <div class="container mt-4 mb-5">
+
+        <!-- REPORT FORM SECTION -->
+        <!-- Hidden by default — only shown when logged in -->
+        <!-- id="report-form-section" lets us show/hide it -->
+        <div id="report-form-section" style="display:none;">
+            <div class="form-section">
+                <h5 class="fw-bold mb-4">📋 Report a Lost Item</h5>
+
+                <div id="form-message"></div>
+
+                <div class="row g-3">
+
+                    <!-- TITLE -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            Item Title *
+                        </label>
+                        <input type="text" id="title" class="form-control" placeholder="e.g. Black Samsung Phone">
+                    </div>
+
+                    <!-- DATE LOST -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            Date Lost *
+                        </label>
+                        <input type="date" id="date_lost" class="form-control">
+                    </div>
+
+                    <!-- CATEGORY -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            Category *
+                        </label>
+                        <select id="category_id" class="form-select">
+                            <option value="">Select category...</option>
+                            <!-- Options loaded dynamically from database -->
+                        </select>
+                    </div>
+
+                    <!-- LOCATION -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            Location *
+                        </label>
+                        <select id="location_id" class="form-select">
+                            <option value="">Select location...</option>
+                            <!-- Options loaded dynamically from database -->
+                        </select>
+                    </div>
+
+                    <!-- DESCRIPTION -->
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">
+                            Description
+                        </label>
+                        <textarea id="description" class="form-control" rows="3"
+                            placeholder="Describe the item in detail — color, brand, any identifying marks...">
+                        </textarea>
+                    </div>
+
+                </div>
+
+                <button onclick="reportLostItem()" class="btn btn-danger mt-3 px-4">
+                    Submit Lost Item Report
+                </button>
+            </div>
+        </div>
+
+        <!-- LOGIN PROMPT -->
+        <!-- Shown when NOT logged in -->
+        <div id="login-prompt" style="display:none;">
+            <div class="alert alert-warning d-flex align-items-center gap-3">
+                <span>🔒 You need to be logged in to report a lost item.</span>
+                <a href="/login.html" class="btn btn-warning btn-sm">
+                    Login Now
+                </a>
+            </div>
+        </div>
+
+        <!-- SEARCH AND FILTER BAR -->
+        <div class="card border-0 shadow-sm p-3 mb-4">
+            <div class="row g-2 align-items-end">
+
+                <div class="col-md-5">
+                    <label class="form-label fw-semibold mb-1">
+                        Search by keyword
+                    </label>
+                    <input type="text" id="search-keyword" class="form-control"
+                        placeholder="e.g. phone, wallet, keys...">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold mb-1">
+                        Category
+                    </label>
+                    <select id="filter-category" class="form-select">
+                        <option value="">All Categories</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold mb-1">
+                        Floor
+                    </label>
+                    <select id="filter-floor" class="form-select">
+                        <option value="">All Floors</option>
+                        <!-- Generate floor options 1-13 -->
+                    </select>
+                </div>
+
+                <div class="col-md-2 d-flex gap-2">
+                    <button onclick="searchItems()" class="btn btn-danger w-100">
+                        Search
+                    </button>
+                    <button onclick="clearSearch()" class="btn btn-outline-secondary w-100">
+                        Clear
+                    </button>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ITEMS GRID -->
+        <!-- All item cards appear here -->
+        <div id="items-container" class="row g-3">
+            <div class="col-12">
+                <p class="text-muted">Loading items...</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/navbar.js"></script>
+
+    <script>
+
+        // =============================================
+        // PAGE INITIALISATION
+        // Runs when page loads
+        // Does 3 things:
+        // 1. Check login status → show/hide form
+        // 2. Load categories into dropdowns
+        // 3. Load all lost items
+        // =============================================
+        async function initPage() {
+            await checkUserAndShowForm();
+            await loadCategories();
+            await loadLocations();
+            await loadFloorOptions();
+            await loadAllItems();
+        }
+
+        // =============================================
+        // CHECK USER AND SHOW/HIDE FORM
+        // If logged in → show report form
+        // If not → show login prompt
+        // =============================================
+        async function checkUserAndShowForm() {
+            const response = await fetch('/api/auth/me', {
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                // Logged in — show the report form
+                // display:block makes a hidden element visible
+                document.getElementById('report-form-section').style.display = 'block';
+                document.getElementById('login-prompt').style.display = 'none';
+            } else {
+                // Not logged in — show the login prompt
+                document.getElementById('report-form-section').style.display = 'none';
+                document.getElementById('login-prompt').style.display = 'block';
+            }
+        }
+
+        // =============================================
+        // LOAD CATEGORIES FROM DATABASE
+        // Fills category dropdowns with real data
+        // =============================================
+        async function loadCategories() {
+            try {
+                // We need a backend route for categories
+                // For now we fetch lost items and 
+                // extract unique categories from them
+                // Later we'll add a proper /api/categories route
+                const response = await fetch('/api/lost-items', {
+                    credentials: 'include'
+                });
+                const items = await response.json();
+
+                // Also fetch categories directly
+                const catResponse = await fetch('/api/categories', {
+                    credentials: 'include'
+                });
+
+                if (catResponse.ok) {
+                    const categories = await catResponse.json();
+
+                    // Fill BOTH category dropdowns
+                    // The form dropdown and the filter dropdown
+                    const formSelect = document.getElementById('category_id');
+                    const filterSelect = document.getElementById('filter-category');
+
+                    categories.forEach(cat => {
+                        // Create an option element for each category
+                        const option = `
+                            <option value="${cat.category_id}">
+                                ${cat.name}
+                            </option>
+                        `;
+                        formSelect.innerHTML += option;
+                        filterSelect.innerHTML += option;
+                    });
+                }
+
+            } catch (err) {
+                console.error('Failed to load categories:', err);
+            }
+        }
+
+        // =============================================
+        // LOAD LOCATIONS
+        // Separate function — loads all locations
+        // into the location dropdown in the report form
+        // =============================================
+        async function loadLocations() {
+            try {
+                const response = await fetch('/api/locations', {
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    console.error('Locations fetch failed');
+                    return;
+                }
+
+                const locations = await response.json();
+                const locationSelect = document.getElementById('location_id');
+
+                // Clear existing options except the first one
+                locationSelect.innerHTML = '<option value="">Select location...</option>';
+
+                locations.forEach(loc => {
+                    // Build readable label
+                    let label = '';
+
+                    if (loc.misc_location) {
+                        // Has a misc name like "Main Entrance"
+                        // Also show floor if available
+                        label = loc.misc_location;
+                        if (loc.floor_no) label += ` (Floor ${loc.floor_no})`;
+                    } else {
+                        // Build from floor + zone + room
+                        if (loc.floor_no) label += `Floor ${loc.floor_no}`;
+                        if (loc.zone) label += `, Zone ${loc.zone}`;
+                        if (loc.room_no) label += `, Room ${loc.room_no}`;
+                    }
+
+                    locationSelect.innerHTML += `
+                <option value="${loc.location_id}">
+                    ${label}
+                </option>
+            `;
+                });
+
+                console.log(`Loaded ${locations.length} locations`);
+
+            } catch (err) {
+                console.error('Failed to load locations:', err);
+            }
+        }
+
+
+        // =============================================
+        // LOAD FLOOR OPTIONS
+        // Fills floor filter with 1-13
+        // =============================================
+        function loadFloorOptions() {
+            const floorSelect = document.getElementById('filter-floor');
+
+            // Loop from 1 to 13
+            // Create one option for each floor
+            for (let i = 1; i <= 13; i++) {
+                floorSelect.innerHTML += `
+                    <option value="${i}">Floor ${i}</option>
+                `;
+            }
+        }
+
+        // =============================================
+        // LOAD ALL LOST ITEMS
+        // Fetches from GET /api/lost-items
+        // and renders them as cards
+        // =============================================
+        async function loadAllItems() {
+            try {
+                const response = await fetch('/api/lost-items', {
+                    credentials: 'include'
+                });
+                const items = await response.json();
+                renderItems(items);
+            } catch (err) {
+                console.error('Failed to load items:', err);
+            }
+        }
+
+        // =============================================
+        // SEARCH ITEMS
+        // Fetches from GET /api/lost-items/search
+        // with query parameters
+        // =============================================
+        async function searchItems() {
+            const keyword = document.getElementById('search-keyword').value.trim();
+            const category_id = document.getElementById('filter-category').value;
+            const floor_no = document.getElementById('filter-floor').value;
+
+            // Build the query string dynamically
+            // Only include parameters that have values
+            let queryString = '?';
+            if (keyword) queryString += `keyword=${keyword}&`;
+            if (category_id) queryString += `category_id=${category_id}&`;
+            if (floor_no) queryString += `floor_no=${floor_no}&`;
+
+            try {
+                const response = await fetch(
+                    `/api/lost-items/search${queryString}`,
+                    { credentials: 'include' }
+                );
+                const items = await response.json();
+                renderItems(items);
+            } catch (err) {
+                console.error('Search failed:', err);
+            }
+        }
+
+        // =============================================
+        // CLEAR SEARCH
+        // Resets all filters and reloads all items
+        // =============================================
+        function clearSearch() {
+            document.getElementById('search-keyword').value = '';
+            document.getElementById('filter-category').value = '';
+            document.getElementById('filter-floor').value = '';
+            loadAllItems();
+        }
+
+        // =============================================
+        // RENDER ITEMS
+        // Takes an array of items
+        // Builds and displays the cards
+        // Used by both loadAllItems and searchItems
+        // =============================================
+        function renderItems(items) {
+            const container = document.getElementById('items-container');
+
+            if (items.length === 0) {
+                container.innerHTML = `
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            No lost items found matching your search.
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = items.map(item => `
+                <div class="col-md-4">
+                    <div 
+                        class="card item-card p-3 h-100"
+                        onclick="window.location.href=
+                        '/item-detail.html?type=lost&id=${item.lost_id}'">
+
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="badge bg-danger badge-status">
+                                ${item.status}
+                            </span>
+                            <small class="text-muted">
+                                ${formatDate(item.date_lost)}
+                            </small>
+                        </div>
+
+                        <h6 class="fw-bold">${item.title}</h6>
+
+                        <p class="text-muted small mb-2">
+                            ${item.description
+                    ? item.description.substring(0, 80) + '...'
+                    : 'No description provided'}
+                        </p>
+
+                        <div class="mt-auto">
+                            <small class="text-muted d-block">
+                                📁 ${item.category_name}
+                            </small>
+                            <small class="text-muted d-block">
+                                📍 ${formatLocation(item)}
+                            </small>
+                            <small class="text-muted d-block">
+                                👤 ${item.reporter_name}
+                            </small>
+                        </div>
+
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // =============================================
+        // REPORT LOST ITEM
+        // Sends POST /api/lost-items
+        // =============================================
+        async function reportLostItem() {
+            const title = document.getElementById('title').value.trim();
+            const date_lost = document.getElementById('date_lost').value;
+            const category_id = document.getElementById('category_id').value;
+            const location_id = document.getElementById('location_id').value;
+            const description = document.getElementById('description').value.trim();
+
+            // Frontend validation
+            if (!title || !date_lost || !category_id || !location_id) {
+                showFormMessage('Please fill in all required fields', 'danger');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/lost-items', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        title,
+                        date_lost,
+                        category_id,
+                        location_id,
+                        description
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showFormMessage(
+                        'Lost item reported successfully!',
+                        'success'
+                    );
+                    // Clear the form fields after success
+                    clearForm();
+                    // Reload items to show the new one
+                    loadAllItems();
+                } else {
+                    showFormMessage(data.message, 'danger');
+                }
+
+            } catch (err) {
+                showFormMessage('Something went wrong. Try again.', 'danger');
+                console.error(err);
+            }
+        }
+
+        // =============================================
+        // CLEAR FORM
+        // Resets all form inputs after submission
+        // =============================================
+        function clearForm() {
+            document.getElementById('title').value = '';
+            document.getElementById('date_lost').value = '';
+            document.getElementById('category_id').value = '';
+            document.getElementById('location_id').value = '';
+            document.getElementById('description').value = '';
+        }
+
+        // =============================================
+        // HELPER FUNCTIONS
+        // =============================================
+        function showFormMessage(text, type) {
+            document.getElementById('form-message').innerHTML = `
+                <div class="alert alert-${type}">${text}</div>
+            `;
+        }
+
+        function formatLocation(item) {
+            if (item.misc_location) return item.misc_location;
+            let parts = [];
+            if (item.floor_no) parts.push(`Floor ${item.floor_no}`);
+            if (item.zone) parts.push(`Zone ${item.zone}`);
+            if (item.room_no) parts.push(`Room ${item.room_no}`);
+            return parts.join(', ') || 'Location not specified';
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+
+        // Run everything when page loads
+        initPage();
+
+    </script>
+
+</body>
+
+</html>

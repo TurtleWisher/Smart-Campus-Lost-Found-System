@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | BRACU Lost & Found</title>
+
+    <!-- Bootstrap CSS from CDN -->
+    <!-- CDN means we load Bootstrap from the internet -->
+    <!-- No need to download or install it -->
+    <link 
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" 
+        rel="stylesheet">
+
+    <style>
+        /* Our custom styles on top of Bootstrap */
+        body {
+            background-color: #f8f9fa;
+        }
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.08);
+        }
+        .btn-success {
+            background-color: #198754;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- NAVBAR CONTAINER -->
+    <!-- navbar.js will inject the navbar HTML here -->
+    <div id="navbar-container"></div>
+
+    <!-- MAIN CONTENT -->
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-5">
+
+                <div class="card p-4">
+                    <h3 class="mb-4 text-center fw-bold">Welcome Back</h3>
+                    <p class="text-center text-muted mb-4">
+                        Login to your BRACU Lost & Found account
+                    </p>
+
+                    <!-- MESSAGE DIV -->
+                    <!-- We show success/error messages here -->
+                    <div id="message"></div>
+
+                    <!-- LOGIN FORM -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            BRACU GSuite Email
+                        </label>
+                        <input 
+                            type="email" 
+                            id="gsuite" 
+                            class="form-control" 
+                            placeholder="yourname@g.bracu.ac.bd">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            Password
+                        </label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            class="form-control" 
+                            placeholder="Enter your password">
+                    </div>
+
+                    <!-- LOGIN BUTTON -->
+                    <button 
+                        onclick="login()" 
+                        class="btn btn-success w-100 mt-2">
+                        Login
+                    </button>
+
+                    <p class="text-center mt-3 text-muted">
+                        Don't have an account? 
+                        <a href="/register.html" class="text-success">
+                            Register here
+                        </a>
+                    </p>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Our shared navbar script -->
+    <!-- This automatically injects the navbar -->
+    <script src="/js/navbar.js"></script>
+
+    <script>
+        // =============================================
+        // LOGIN FUNCTION
+        // Runs when user clicks the Login button
+        // =============================================
+        async function login() {
+            // Get values from the input fields
+            // document.getElementById finds the element
+            // .value gets whatever the user typed in it
+            const gsuite = document.getElementById('gsuite').value.trim();
+            const password = document.getElementById('password').value.trim();
+
+            // Basic frontend validation
+            // Never trust that users fill things in correctly
+            if (!gsuite || !password) {
+                showMessage('Please fill in all fields', 'danger');
+                return; 
+                // return stops the function here
+                // Nothing below this line runs
+            }
+
+            try {
+                // Send login request to our backend
+                // Method POST because we are sending data
+                // headers tells the server we're sending JSON
+                // body is the actual data we're sending
+                // JSON.stringify converts JS object to JSON string
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json' 
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ gsuite, password })
+                });
+
+                // Parse the JSON response from the server
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Login successful
+                    showMessage('Login successful! Redirecting...', 'success');
+
+                    // Wait 1 second then redirect to home page
+                    setTimeout(() => {
+                        window.location.href = '/index.html';
+                    }, 1000);
+
+                } else {
+                    // Login failed — show the error message
+                    // from the server (like "Invalid email or password")
+                    showMessage(data.message, 'danger');
+                }
+
+            } catch (err) {
+                showMessage('Something went wrong. Try again.', 'danger');
+                console.error(err);
+            }
+        }
+
+        // =============================================
+        // SHOW MESSAGE HELPER FUNCTION
+        // Displays a Bootstrap alert in the message div
+        // type can be 'success', 'danger', 'warning' etc.
+        // =============================================
+        function showMessage(text, type) {
+            document.getElementById('message').innerHTML = `
+                <div class="alert alert-${type} alert-dismissible">
+                    ${text}
+                </div>
+            `;
+        }
+
+        // Allow pressing Enter key to trigger login
+        // Instead of having to click the button
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') login();
+        });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register | BRACU Lost & Found</title>
+    <link 
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" 
+        rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.08);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="navbar-container"></div>
+
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card p-4">
+                    <h3 class="mb-4 text-center fw-bold">Create Account</h3>
+                    <p class="text-center text-muted mb-4">
+                        Join BRACU Lost & Found System
+                    </p>
+
+                    <div id="message"></div>
+
+                    <!-- FULL NAME -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Full Name</label>
+                        <input 
+                            type="text" 
+                            id="name" 
+                            class="form-control" 
+                            placeholder="Your full name">
+                    </div>
+
+                    <!-- GSUITE EMAIL -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            BRACU GSuite Email
+                        </label>
+                        <input 
+                            type="email" 
+                            id="gsuite" 
+                            class="form-control" 
+                            placeholder="yourname@g.bracu.ac.bd">
+                    </div>
+
+                    <!-- USER TYPE -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">I am a</label>
+                        <select id="user_type" class="form-select">
+                            <option value="">Select type...</option>
+                            <option value="student">Student</option>
+                            <option value="staff">Staff</option>
+                            <option value="faculty">Faculty</option>
+                        </select>
+                    </div>
+
+                    <!-- TYPE SPECIFIC ID -->
+                    <!-- This label changes based on user_type selection -->
+                    <div class="mb-3" id="type-id-container">
+                        <label class="form-label fw-semibold" id="type-id-label">
+                            ID Number
+                        </label>
+                        <input 
+                            type="text" 
+                            id="type_specific_id" 
+                            class="form-control" 
+                            placeholder="Your ID number">
+                    </div>
+
+                    <!-- PASSWORD -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Password</label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            class="form-control" 
+                            placeholder="Create a password">
+                    </div>
+
+                    <!-- CONFIRM PASSWORD -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            Confirm Password
+                        </label>
+                        <input 
+                            type="password" 
+                            id="confirm_password" 
+                            class="form-control" 
+                            placeholder="Repeat your password">
+                    </div>
+
+                    <button 
+                        onclick="register()" 
+                        class="btn btn-success w-100 mt-2">
+                        Create Account
+                    </button>
+
+                    <p class="text-center mt-3 text-muted">
+                        Already have an account? 
+                        <a href="/login.html" class="text-success">Login here</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/navbar.js"></script>
+
+    <script>
+        // =============================================
+        // DYNAMIC LABEL — changes based on user type
+        // When user selects "Student" → label says "Student ID"
+        // When user selects "Staff" → label says "Staff ID"
+        // =============================================
+        document.getElementById('user_type').addEventListener('change', function() {
+            const label = document.getElementById('type-id-label');
+            const type = this.value;
+
+            if (type === 'student') {
+                label.textContent = 'Student ID';
+            } else if (type === 'staff') {
+                label.textContent = 'Staff ID';
+            } else if (type === 'faculty') {
+                label.textContent = 'Faculty ID';
+            } else {
+                label.textContent = 'ID Number';
+            }
+        });
+
+        // =============================================
+        // REGISTER FUNCTION
+        // =============================================
+        async function register() {
+            const name = document.getElementById('name').value.trim();
+            const gsuite = document.getElementById('gsuite').value.trim();
+            const user_type = document.getElementById('user_type').value;
+            const type_specific_id = document.getElementById('type_specific_id').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const confirm_password = document.getElementById('confirm_password').value.trim();
+
+            // Validation checks
+            if (!name || !gsuite || !user_type || !password) {
+                showMessage('Please fill in all required fields', 'danger');
+                return;
+            }
+
+            // Check passwords match BEFORE sending to server
+            // Always validate on frontend first — saves unnecessary requests
+            if (password !== confirm_password) {
+                showMessage('Passwords do not match', 'danger');
+                return;
+            }
+
+            if (password.length < 6) {
+                showMessage('Password must be at least 6 characters', 'danger');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ 
+                        name, 
+                        gsuite, 
+                        user_type, 
+                        type_specific_id, 
+                        password 
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage(
+                        'Account created successfully! Redirecting to login...', 
+                        'success'
+                    );
+                    setTimeout(() => {
+                        window.location.href = '/login.html';
+                    }, 1500);
+                } else {
+                    showMessage(data.message, 'danger');
+                }
+
+            } catch (err) {
+                showMessage('Something went wrong. Try again.', 'danger');
+                console.error(err);
+            }
+        }
+
+        function showMessage(text, type) {
+            document.getElementById('message').innerHTML = `
+                <div class="alert alert-${type}">
+                    ${text}
+                </div>
+            `;
+        }
+    </script>
+
+</body>
+</html>

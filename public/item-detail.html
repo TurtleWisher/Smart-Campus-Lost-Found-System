@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Item Detail | BRACU Lost & Found</title>
+    <link 
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" 
+        rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .detail-card {
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        .info-row {
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        .status-badge {
+            font-size: 0.85rem;
+            padding: 6px 14px;
+            border-radius: 20px;
+        }
+        .edit-form {
+            display: none;
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="navbar-container"></div>
+
+    <div class="container mt-4 mb-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+
+                <!-- BACK BUTTON -->
+                <!-- Goes back to previous page -->
+                <button 
+                    onclick="history.back()" 
+                    class="btn btn-outline-secondary btn-sm mb-4">
+                    ← Back
+                </button>
+
+                <!-- MESSAGE DIV -->
+                <div id="message"></div>
+
+                <!-- MAIN DETAIL CARD -->
+                <!-- Filled by JavaScript after fetching item data -->
+                <div id="detail-container">
+                    <div class="card detail-card p-4">
+                        <p class="text-muted">Loading item details...</p>
+                    </div>
+                </div>
+
+                <!-- EDIT FORM -->
+                <!-- Hidden by default -->
+                <!-- Only shown when owner clicks Edit -->
+                <div id="edit-form" class="edit-form">
+                    <h5 class="fw-bold mb-4">✏️ Edit Item</h5>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Title</label>
+                            <input 
+                                type="text" 
+                                id="edit-title" 
+                                class="form-control">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" id="edit-date-label">
+                                Date
+                            </label>
+                            <input 
+                                type="date" 
+                                id="edit-date" 
+                                class="form-control">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Category</label>
+                            <select id="edit-category" class="form-select"></select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Location</label>
+                            <select id="edit-location" class="form-select"></select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Status</label>
+                            <select id="edit-status" class="form-select"></select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Description</label>
+                            <textarea 
+                                id="edit-description" 
+                                class="form-control" 
+                                rows="3">
+                            </textarea>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2 mt-3">
+                        <button 
+                            onclick="saveEdit()" 
+                            class="btn btn-success">
+                            Save Changes
+                        </button>
+                        <button 
+                            onclick="cancelEdit()" 
+                            class="btn btn-outline-secondary">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/navbar.js"></script>
+
+    <script>
+
+        // =============================================
+        // GLOBAL VARIABLES
+        // These are available to all functions
+        // on this page
+        // =============================================
+
+        // Read type and id from the URL
+        // window.location.search gives "?type=lost&id=5"
+        // URLSearchParams parses it into key-value pairs
+        const params = new URLSearchParams(window.location.search);
+        const itemType = params.get('type'); // "lost" or "found"
+        const itemId = params.get('id');     // the item's ID number
+
+        // Will hold the current logged in user
+        let currentUser = null;
+
+        // Will hold the full item data after fetching
+        let currentItem = null;
+
+        // =============================================
+        // PAGE INITIALISATION
+        // =============================================
+        async function initPage() {
+            // If no type or id in URL — invalid page
+            if (!itemType || !itemId) {
+                document.getElementById('detail-container').innerHTML = `
+                    <div class="alert alert-danger">
+                        Invalid item. Please go back and try again.
+                    </div>
+                `;
+                return;
+            }
+
+            // Get current logged in user
+            // null if not logged in
+            const userResponse = await fetch('/api/auth/me', {
+                credentials: 'include'
+            });
+            if (userResponse.ok) {
+                currentUser = await userResponse.json();
+            }
+
+            // Load the item details
+            await loadItemDetail();
+
+            // Load categories and locations for edit form
+            await loadEditDropdowns();
+        }
+
+        // =============================================
+        // LOAD ITEM DETAIL
+        // Fetches the specific item by type and id
+        // =============================================
+        async function loadItemDetail() {
+            try {
+                // Build the correct API URL based on type
+                // type=lost  → /api/lost-items/5
+                // type=found → /api/found-items/5
+                const apiUrl = itemType === 'lost'
+                    ? `/api/lost-items/${itemId}`
+                    : `/api/found-items/${itemId}`;
+
+                const response = await fetch(apiUrl, {
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    document.getElementById('detail-container').innerHTML = `
+                        <div class="alert alert-danger">
+                            Item not found.
+                        </div>
+                    `;
+                    return;
+                }
+
+                currentItem = await response.json();
+                renderItemDetail(currentItem);
+
+            } catch (err) {
+                console.error('Failed to load item:', err);
+            }
+        }
+
+        // =============================================
+        // RENDER ITEM DETAIL
+        // Builds and displays the detail card
+        // =============================================
+        function renderItemDetail(item) {
+            // Determine badge color based on type
+            const badgeColor = itemType === 'lost' ? 'danger' : 'success';
+
+            // Determine the date label based on type
+            const dateLabel = itemType === 'lost' ? 'Date Lost' : 'Date Found';
+            const dateValue = itemType === 'lost' ? item.date_lost : item.date_found;
+
+            // Check if current user owns this item
+            // Used to show/hide edit and delete buttons
+            const isOwner = currentUser && 
+                currentUser.user_id === item.user_id;
+
+            // Check if admin
+            const isAdmin = currentUser && 
+                currentUser.role === 'admin';
+
+            // Can edit/delete if owner OR admin
+            const canModify = isOwner || isAdmin;
+
+            document.getElementById('detail-container').innerHTML = `
+                <div class="card detail-card p-4">
+
+                    <!-- HEADER -->
+                    <div class="d-flex justify-content-between align-items-start mb-4">
+                        <div>
+                            <h3 class="fw-bold mb-1">${item.title}</h3>
+                            <span class="badge bg-${badgeColor} status-badge">
+                                ${item.status}
+                            </span>
+                        </div>
+
+                        <!-- EDIT/DELETE BUTTONS -->
+                        <!-- Only shown if user owns this item or is admin -->
+                        ${canModify ? `
+                            <div class="d-flex gap-2">
+                                <button 
+                                    onclick="showEditForm()" 
+                                    class="btn btn-outline-primary btn-sm">
+                                    ✏️ Edit
+                                </button>
+                                <button 
+                                    onclick="deleteItem()" 
+                                    class="btn btn-outline-danger btn-sm">
+                                    🗑️ Delete
+                                </button>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- DETAILS -->
+                    <div class="info-row">
+                        <span class="text-muted">📁 Category</span>
+                        <span class="float-end fw-semibold">
+                            ${item.category_name}
+                        </span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="text-muted">📍 Location</span>
+                        <span class="float-end fw-semibold">
+                            ${formatLocation(item)}
+                        </span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="text-muted">📅 ${dateLabel}</span>
+                        <span class="float-end fw-semibold">
+                            ${formatDate(dateValue)}
+                        </span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="text-muted">📅 Date Reported</span>
+                        <span class="float-end fw-semibold">
+                            ${formatDate(item.date_reported)}
+                        </span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="text-muted">👤 Reported By</span>
+                        <span class="float-end fw-semibold">
+                            ${item.reporter_name}
+                        </span>
+                    </div>
+
+                    <!-- DESCRIPTION -->
+                    ${item.description ? `
+                        <div class="mt-4">
+                            <p class="text-muted mb-1">📝 Description</p>
+                            <p class="mb-0">${item.description}</p>
+                        </div>
+                    ` : ''}
+
+                </div>
+            `;
+        }
+
+        // =============================================
+        // SHOW EDIT FORM
+        // Reveals the edit form and pre-fills
+        // it with the current item's values
+        // =============================================
+        function showEditForm() {
+            // Show the edit form
+            document.getElementById('edit-form').style.display = 'block';
+
+            // Pre-fill with current values
+            document.getElementById('edit-title').value = currentItem.title;
+            document.getElementById('edit-description').value = 
+                currentItem.description || '';
+
+            // Set date field based on type
+            if (itemType === 'lost') {
+                document.getElementById('edit-date-label').textContent = 'Date Lost';
+                document.getElementById('edit-date').value = 
+                    currentItem.date_lost.split('T')[0];
+            } else {
+                document.getElementById('edit-date-label').textContent = 'Date Found';
+                document.getElementById('edit-date').value = 
+                    currentItem.date_found.split('T')[0];
+            }
+
+            // Set current values in dropdowns
+            document.getElementById('edit-category').value = currentItem.category_id;
+            document.getElementById('edit-location').value = currentItem.location_id;
+            document.getElementById('edit-status').value = currentItem.status;
+
+            // Scroll down to the edit form
+            document.getElementById('edit-form').scrollIntoView({ 
+                behavior: 'smooth' 
+            });
+        }
+
+        // =============================================
+        // CANCEL EDIT
+        // Hides the edit form without saving
+        // =============================================
+        function cancelEdit() {
+            document.getElementById('edit-form').style.display = 'none';
+        }
+
+        // =============================================
+        // SAVE EDIT
+        // Sends PUT request to update the item
+        // =============================================
+        async function saveEdit() {
+            const title = document.getElementById('edit-title').value.trim();
+            const description = document.getElementById('edit-description').value.trim();
+            const date = document.getElementById('edit-date').value;
+            const category_id = document.getElementById('edit-category').value;
+            const location_id = document.getElementById('edit-location').value;
+            const status = document.getElementById('edit-status').value;
+
+            if (!title || !date || !category_id || !location_id) {
+                showMessage('Please fill in all required fields', 'danger');
+                return;
+            }
+
+            // Build the correct body based on item type
+            const body = itemType === 'lost'
+                ? { title, description, date_lost: date, 
+                    category_id, location_id, status }
+                : { title, description, date_found: date, 
+                    category_id, location_id, status };
+
+            try {
+                const apiUrl = itemType === 'lost'
+                    ? `/api/lost-items/${itemId}`
+                    : `/api/found-items/${itemId}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(body)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage('Item updated successfully!', 'success');
+                    // Hide edit form
+                    cancelEdit();
+                    // Reload item details to show updated values
+                    await loadItemDetail();
+                } else {
+                    showMessage(data.message, 'danger');
+                }
+
+            } catch (err) {
+                showMessage('Something went wrong. Try again.', 'danger');
+                console.error(err);
+            }
+        }
+
+        // =============================================
+        // DELETE ITEM
+        // Asks for confirmation then deletes
+        // =============================================
+        async function deleteItem() {
+            // confirm() shows a browser popup
+            // Returns true if user clicks OK
+            // Returns false if user clicks Cancel
+            const confirmed = confirm(
+                'Are you sure you want to delete this item? This cannot be undone.'
+            );
+
+            if (!confirmed) return;
+
+            try {
+                const apiUrl = itemType === 'lost'
+                    ? `/api/lost-items/${itemId}`
+                    : `/api/found-items/${itemId}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage('Item deleted successfully. Redirecting...', 'success');
+
+                    // After deleting redirect back to
+                    // the correct list page after 1.5 seconds
+                    setTimeout(() => {
+                        window.location.href = itemType === 'lost'
+                            ? '/lost-items.html'
+                            : '/found-items.html';
+                    }, 1500);
+
+                } else {
+                    showMessage(data.message, 'danger');
+                }
+
+            } catch (err) {
+                showMessage('Something went wrong. Try again.', 'danger');
+                console.error(err);
+            }
+        }
+
+        // =============================================
+        // LOAD EDIT DROPDOWNS
+        // Fills category, location and status
+        // dropdowns in the edit form
+        // =============================================
+        async function loadEditDropdowns() {
+            try {
+                // Load categories
+                const catResponse = await fetch('/api/categories', {
+                    credentials: 'include'
+                });
+                if (catResponse.ok) {
+                    const categories = await catResponse.json();
+                    const catSelect = document.getElementById('edit-category');
+                    categories.forEach(cat => {
+                        catSelect.innerHTML += `
+                            <option value="${cat.category_id}">
+                                ${cat.name}
+                            </option>
+                        `;
+                    });
+                }
+
+                // Load locations
+                const locResponse = await fetch('/api/locations', {
+                    credentials: 'include'
+                });
+                if (locResponse.ok) {
+                    const locations = await locResponse.json();
+                    const locSelect = document.getElementById('edit-location');
+                    locations.forEach(loc => {
+                        let label = '';
+                        if (loc.misc_location) {
+                            label = loc.misc_location;
+                            if (loc.floor_no) label += ` (Floor ${loc.floor_no})`;
+                        } else {
+                            if (loc.floor_no) label += `Floor ${loc.floor_no}`;
+                            if (loc.zone) label += `, Zone ${loc.zone}`;
+                            if (loc.room_no) label += `, Room ${loc.room_no}`;
+                        }
+                        locSelect.innerHTML += `
+                            <option value="${loc.location_id}">${label}</option>
+                        `;
+                    });
+                }
+
+                // Load status options based on item type
+                const statusSelect = document.getElementById('edit-status');
+                const lostStatuses = ['Lost', 'Pending', 'Claimed', 'Returned'];
+                const foundStatuses = ['Found', 'Pending', 'Returned'];
+
+                const statuses = itemType === 'lost' 
+                    ? lostStatuses 
+                    : foundStatuses;
+
+                statuses.forEach(s => {
+                    statusSelect.innerHTML += `
+                        <option value="${s}">${s}</option>
+                    `;
+                });
+
+            } catch (err) {
+                console.error('Failed to load edit dropdowns:', err);
+            }
+        }
+
+        // =============================================
+        // HELPER FUNCTIONS
+        // =============================================
+        function showMessage(text, type) {
+            document.getElementById('message').innerHTML = `
+                <div class="alert alert-${type}">${text}</div>
+            `;
+            // Scroll to top to see message
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function formatLocation(item) {
+            if (item.misc_location) return item.misc_location;
+            let parts = [];
+            if (item.floor_no) parts.push(`Floor ${item.floor_no}`);
+            if (item.zone) parts.push(`Zone ${item.zone}`);
+            if (item.room_no) parts.push(`Room ${item.room_no}`);
+            return parts.join(', ') || 'Location not specified';
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        // Run on page load
+        initPage();
+
+    </script>
+
+</body>
+</html>

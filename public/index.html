@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BRACU Lost & Found System</title>
+    <link 
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" 
+        rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+
+        /* Hero section — the big banner at the top */
+        .hero {
+            background: linear-gradient(135deg, #198754, #0d6efd);
+            color: white;
+            padding: 80px 0;
+            text-align: center;
+        }
+
+        /* Each lost/found item shows as a card */
+        .item-card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+
+        /* Card lifts up slightly when hovered */
+        .item-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .badge-lost {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .badge-found {
+            background-color: #198754;
+            color: white;
+        }
+
+        .section-title {
+            font-weight: 700;
+            margin-bottom: 24px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <div id="navbar-container"></div>
+
+    <!-- HERO SECTION -->
+    <!-- This is the big banner at the top of the page -->
+    <div class="hero">
+        <div class="container">
+            <h1 class="display-4 fw-bold mb-3">
+                BRACU Lost & Found
+            </h1>
+            <p class="lead mb-5">
+                Reuniting BRACU students, staff and faculty 
+                with their lost belongings
+            </p>
+
+            <!-- ACTION BUTTONS -->
+            <!-- onclick calls functions defined below -->
+            <div class="d-flex justify-content-center gap-3 flex-wrap">
+                <button 
+                    onclick="goToReport('lost')" 
+                    class="btn btn-light btn-lg px-4">
+                    📋 Report Lost Item
+                </button>
+                <button 
+                    onclick="goToReport('found')" 
+                    class="btn btn-outline-light btn-lg px-4">
+                    🔍 Report Found Item
+                </button>
+            </div>
+
+            <!-- BROWSE BUTTONS -->
+            <div class="d-flex justify-content-center gap-3 mt-3 flex-wrap">
+                <a 
+                    href="/lost-items.html" 
+                    class="btn btn-outline-light px-4">
+                    Browse Lost Items
+                </a>
+                <a 
+                    href="/found-items.html" 
+                    class="btn btn-outline-light px-4">
+                    Browse Found Items
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- RECENT ITEMS SECTION -->
+    <div class="container mt-5 mb-5">
+        <div class="row">
+
+            <!-- RECENT LOST ITEMS — left column -->
+            <div class="col-md-6">
+                <h4 class="section-title">
+                    🔴 Recently Lost
+                </h4>
+
+                <!-- Cards will be injected here by JavaScript -->
+                <div id="recent-lost-container">
+                    <!-- Loading state shown while fetching -->
+                    <p class="text-muted">Loading...</p>
+                </div>
+
+                <a 
+                    href="/lost-items.html" 
+                    class="btn btn-outline-danger btn-sm mt-2">
+                    View All Lost Items →
+                </a>
+            </div>
+
+            <!-- RECENT FOUND ITEMS — right column -->
+            <div class="col-md-6">
+                <h4 class="section-title">
+                    🟢 Recently Found
+                </h4>
+
+                <div id="recent-found-container">
+                    <p class="text-muted">Loading...</p>
+                </div>
+
+                <a 
+                    href="/found-items.html" 
+                    class="btn btn-outline-success btn-sm mt-2">
+                    View All Found Items →
+                </a>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/navbar.js"></script>
+
+    <script>
+
+        // =============================================
+        // REPORT BUTTON LOGIC — Option A
+        // Check if logged in first
+        // If yes → go to report page
+        // If no → go to login page
+        // =============================================
+        async function goToReport(type) {
+            try {
+                // Check login status by calling /api/auth/me
+                const response = await fetch('/api/auth/me', {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    // User IS logged in
+                    // Send them to the correct report page
+                    if (type === 'lost') {
+                        window.location.href = '/lost-items.html';
+                    } else {
+                        window.location.href = '/found-items.html';
+                    }
+                } else {
+                    // User is NOT logged in
+                    // Send them to login page
+                    window.location.href = '/login.html';
+                }
+
+            } catch (err) {
+                window.location.href = '/login.html';
+            }
+        }
+
+        // =============================================
+        // LOAD RECENT LOST ITEMS
+        // Fetches all lost items and shows only
+        // the first 3 (most recent)
+        // =============================================
+        async function loadRecentLostItems() {
+            try {
+                const response = await fetch('/api/lost-items', {
+                    credentials: 'include'
+                });
+
+                const items = await response.json();
+
+                // Get the container div
+                const container = document.getElementById('recent-lost-container');
+
+                // If no items exist yet
+                if (items.length === 0) {
+                    container.innerHTML = `
+                        <p class="text-muted">
+                            No lost items reported yet.
+                        </p>
+                    `;
+                    return;
+                }
+
+                // Take only the first 3 items
+                // .slice(0, 3) means "give me items 
+                // from index 0 up to (not including) index 3"
+                const recent = items.slice(0, 3);
+
+                // Build HTML cards for each item
+                // .map() goes through each item and returns
+                // an HTML string for it
+                // .join('') combines all strings into one
+                container.innerHTML = recent.map(item => `
+                    <div 
+                        class="card item-card mb-3 p-3"
+                        onclick="window.location.href='/item-detail.html?type=lost&id=${item.lost_id}'">
+                        
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h6 class="fw-bold mb-1">${item.title}</h6>
+                            <span class="badge badge-lost px-2 py-1">
+                                ${item.status}
+                            </span>
+                        </div>
+
+                        <small class="text-muted">
+                            📁 ${item.category_name}
+                        </small><br>
+
+                        <small class="text-muted">
+                            📍 ${formatLocation(item)}
+                        </small><br>
+
+                        <small class="text-muted">
+                            📅 Lost on: ${formatDate(item.date_lost)}
+                        </small>
+                    </div>
+                `).join('');
+
+            } catch (err) {
+                console.error('Failed to load lost items:', err);
+            }
+        }
+
+        // =============================================
+        // LOAD RECENT FOUND ITEMS
+        // Same pattern as lost items
+        // =============================================
+        async function loadRecentFoundItems() {
+            try {
+                const response = await fetch('/api/found-items', {
+                    credentials: 'include'
+                });
+
+                const items = await response.json();
+                const container = document.getElementById('recent-found-container');
+
+                if (items.length === 0) {
+                    container.innerHTML = `
+                        <p class="text-muted">
+                            No found items reported yet.
+                        </p>
+                    `;
+                    return;
+                }
+
+                const recent = items.slice(0, 3);
+
+                container.innerHTML = recent.map(item => `
+                    <div 
+                        class="card item-card mb-3 p-3"
+                        onclick="window.location.href='/item-detail.html?type=found&id=${item.found_id}'">
+                        
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h6 class="fw-bold mb-1">${item.title}</h6>
+                            <span class="badge badge-found px-2 py-1">
+                                ${item.status}
+                            </span>
+                        </div>
+
+                        <small class="text-muted">
+                            📁 ${item.category_name}
+                        </small><br>
+
+                        <small class="text-muted">
+                            📍 ${formatLocation(item)}
+                        </small><br>
+
+                        <small class="text-muted">
+                            📅 Found on: ${formatDate(item.date_found)}
+                        </small>
+                    </div>
+                `).join('');
+
+            } catch (err) {
+                console.error('Failed to load found items:', err);
+            }
+        }
+
+        // =============================================
+        // HELPER — FORMAT LOCATION
+        // Builds a readable location string from
+        // floor_no, zone, room_no, misc_location
+        // =============================================
+        function formatLocation(item) {
+            // If misc_location exists use that
+            if (item.misc_location) return item.misc_location;
+
+            // Otherwise build from floor + zone + room
+            let parts = [];
+            if (item.floor_no) parts.push(`Floor ${item.floor_no}`);
+            if (item.zone) parts.push(`Zone ${item.zone}`);
+            if (item.room_no) parts.push(`Room ${item.room_no}`);
+
+            // .join(', ') combines parts with comma
+            // like "Floor 8, Zone F, Room 812"
+            return parts.join(', ') || 'Location not specified';
+        }
+
+        // =============================================
+        // HELPER — FORMAT DATE
+        // Converts "2024-04-20T00:00:00.000Z"
+        // into "April 20, 2024"
+        // =============================================
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        // =============================================
+        // RUN ON PAGE LOAD
+        // These two functions run immediately when
+        // the page finishes loading
+        // =============================================
+        loadRecentLostItems();
+        loadRecentFoundItems();
+
+    </script>
+
+</body>
+</html>

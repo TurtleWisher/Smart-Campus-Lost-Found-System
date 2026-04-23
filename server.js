@@ -82,6 +82,34 @@ app.use('/api/lost-items', lostRoutes);
 // Found items feature
 const foundRoutes = require('./routes/foundRoutes');
 app.use('/api/found-items', foundRoutes);
+
+// Categories route
+// Returns all categories for dropdown menus
+app.get('/api/categories', async (req, res) => {
+    try {
+        const db = require('./config/db');
+        const [rows] = await db.query(
+            'SELECT * FROM categories ORDER BY name'
+        );
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Locations route
+// Returns all locations for dropdown menus
+app.get('/api/locations', async (req, res) => {
+    try {
+        const db = require('./config/db');
+        const [rows] = await db.query(
+            'SELECT * FROM locations ORDER BY floor_no, zone'
+        );
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
 // =============================================
 // START THE SERVER
 // =============================================
