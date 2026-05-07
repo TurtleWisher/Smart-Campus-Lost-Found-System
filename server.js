@@ -48,6 +48,10 @@ app.use(express.urlencoded({ extended: true }));
 //    be opened directly in the browser
 app.use(express.static(path.join(__dirname, 'public')));
 
+// uploads folder is where multer saves uploaded files
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // 5. This sets up sessions — the memory system
 //    secret: the key used to encrypt the session
 //    resave: false means don't save session if nothing changed
@@ -82,6 +86,18 @@ app.use('/api/lost-items', lostRoutes);
 // Found items feature
 const foundRoutes = require('./routes/foundRoutes');
 app.use('/api/found-items', foundRoutes);
+
+// Claims feature
+const claimsRoutes = require('./routes/claimsRoutes');
+app.use('/api/claims', claimsRoutes);
+
+// Matching feature
+const matchRoutes = require('./routes/matchRoutes');
+app.use('/api/matches', matchRoutes);
+
+// Admin feature
+const adminRoutes = require('./routes/adminRoutes');
+app.use('/api/admin', adminRoutes);
 
 // Categories route
 // Returns all categories for dropdown menus

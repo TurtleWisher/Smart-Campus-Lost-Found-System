@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Found Item Detail - BRACU Lost & Found</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-dark bg-success mb-4">
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="index.html">BRACU Lost & Found</a>
+        <div>
+            <a href="found-items.html" class="btn btn-outline-light btn-sm me-2">
+                Found Items
+            </a>
+            <a href="my-claims.html" class="btn btn-outline-light btn-sm me-2">
+                My Claims
+            </a>
+            <button onclick="logout()" class="btn btn-light btn-sm">
+                Logout
+            </button>
+        </div>
+    </div>
+</nav>
+
+<div class="container pb-5">
+    <!--
+        This one div is our "canvas"
+        JavaScript will paint everything inside it
+        It starts with a Loading message
+        then gets replaced with real content
+    -->
+    <div id="item-container">
+        <p class="text-muted">Loading item details...</p>
+    </div>
+</div>
+
+<script>
+
+// ══════════════════════════════════════════════════════
+// PART 1 — SETUP
+// Before we do anything, we need two pieces of info:
+// 1. Which found item are we looking at? (from the URL)
+// 2. Who is currently logged in? (from the session)
+// ══════════════════════════════════════════════════════
+
+// When someone navigates to this page, the URL looks like:
+// found-item-detail.html?id=1
+// The "?id=1" part is called the query string
+// URLSearchParams is a built-in browser tool that reads it
+const params = new URLSearchParams(window.location.search);
+const found_id = params.get('id');
+// params.get('id') reads the value of 'id' from the URL
+// If URL is ?id=1 → found_id = "1"
+// If URL has no ?id= → found_id = null
+
+// Safety check — if no ID in the URL, stop here and show error
+if (!found_id) {
+    document.getElementById('item-container').innerHTML =
+        '<div class="alert alert-danger">No item ID in URL. Go back and click an item properly.</div>';
+}
+
+// This variable will hold the logged-in user's data
+// We fill it later using /api/auth/me
+// null means nobody is logged in (yet — we check soon)
+let currentUser = null;
+
+
+// ══════════════════════════════════════════════════════
+// PART 2 — LOAD PAGE
+// This is the main function that kicks everything off
+// It runs automatically at the very bottom of this script
+// ══════════════════════════════════════════════════════
+async function loadPage() {
+
+    // ── Step A: Find out who is logged in ──────────────
+    // We call GET /api/auth/me
+    // If someone is logged in, it returns their info
+    // If nobody is logged in, the server returns 401
+    // Either way, we do NOT crash — we handle both cases
+    try {
+        const meRes = await fetch('/api/auth/me', {
+            credentials: 'include'
+            // credentials: 'include' is REQUIRED for session cookies
+            // Without it, the browser strips the cookie from the request
+            // and the server thinks nobody is logged in
+        });
+
+        if (meRes.ok) {
+            // Server returned 200 — someone IS logged in
+            // Store their info so we can check role, email, etc. later
+            currentUser = await meRes.json();
+        }
+        // If server returned 401, currentUser stays null
+        // That is fine — we handle the "not logged in" case below
+
+    } catch (err) {
+        // Network error — treat as not logged in
+        console.error('Could not check login status:', err);
+    }
+
+    // ── Step B: Load the found item from the database ──
+    await loadItemDetails();
+}
+
+
+// ══════════════════════════════════════════════════════
+// PART 3 — FETCH AND DISPLAY THE FOUND ITEM DETAILS
+// ══════════════════════════════════════════════════════
+async function loadItemDetails() {
+    try {
+        // Call our found items API with the ID from the URL
+        const res = await fetch(`/api/found-items/${found_id}`, {
+            credentials: 'include'
+        });
+
+        // If item does not exist (404) or server error
+        if (!res.ok) {
+            document.getElementById('item-container').innerHTML =
+                '<div class="alert alert-danger">Item not found or server error.</div>';
+            return;
+        }
+
+        // item is a JavaScript object with all the item's data
+        // Example: { found_id:1, title:"Black Phone", status:"Pending", ... }
+        const item = await res.json();
+
+        // ── Build a readable location string ───────────
+        // Some locations have misc_location (e.g. "Main Entrance")
+        // Others have floor_no + zone + room_no
+        // We check which one exists and build accordingly
+        let locationText = '';
+        if (item.misc_location) {
+            locationText = item.misc_location;
+        } else {
+            locationText = `Floor ${item.floor_no}`;
+            if (item.zone)    locationText += `, Zone ${item.zone}`;
+            if (item.room_no) locationText += `, Room ${item.room_no}`;
+        }
+
+        // ── Pick a badge color based on status ─────────
+        // Bootstrap has colors like bg-primary (blue), bg-warning (yellow)
+        const statusColor = {
+            'Found':    'primary',   // blue  = actively listed
+            'Pending':  'warning',   // yellow = under review
+            'Returned': 'success'    // green  = case closed
+        };
+        const badgeColor = statusColor[item.status] || 'secondary';
+
+        // ── Paint the item detail card onto the page ───
+        document.getElementById('item-container').innerHTML = `
+
+            <a href="found-items.html" class="btn btn-outline-secondary btn-sm mb-3">
+                ← Back to Found Items
+            </a>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h2 class="card-title mb-0">${item.title}</h2>
+                        <span class="badge bg-${badgeColor} fs-6">${item.status}</span>
+                    </div>
+
+                    <hr>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Category:</strong> ${item.category_name}</p>
+                            <p><strong>Location:</strong> ${locationText}</p>
+                            <p><strong>Date Found:</strong> ${item.date_found}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Reported By:</strong> ${item.reporter_name}</p>
+                            <p><strong>Reported On:</strong> 
+                               ${new Date(item.date_reported).toLocaleDateString()}
+                            </p>
+                        </div>
+                    </div>
+
+                    <p class="mt-2">
+                        <strong>Description:</strong><br>
+                        ${item.description || '<em class="text-muted">No description provided.</em>'}
+                    </p>
+
+                </div>
+            </div>
+
+            <!--
+                This empty div is the "action area"
+                We fill it next based on who is logged in
+            -->
+            <div id="action-section"></div>
+        `;
+
+        // Now that the item is on screen, decide what action to show
+        decideActionSection(item);
+
+    } catch (err) {
+        console.error(err);
+        document.getElementById('item-container').innerHTML =
+            '<div class="alert alert-danger">Failed to load item. Is your server running?</div>';
+    }
+}
+
+
+// ══════════════════════════════════════════════════════
+// PART 4 — DECIDE WHAT THE ACTION SECTION SHOWS
+//
+// Four possible situations:
+// A) Not logged in        → "Login to claim" message
+// B) Logged in as finder  → Review panel (see all claims)
+// C) Logged in as admin   → Review panel (see all claims)
+// D) Logged in as other   → Claim form
+//
+// Also: if item is already Returned → show closed message
+// ══════════════════════════════════════════════════════
+function decideActionSection(item) {
+    const section = document.getElementById('action-section');
+
+    // Situation A: Nobody is logged in
+    if (!currentUser) {
+        section.innerHTML = `
+            <div class="alert alert-info">
+                <a href="login.html" class="fw-bold">Log in</a> 
+                to submit a claim for this item.
+            </div>`;
+        return;
+    }
+
+    // Check if the logged-in user is the finder of this item
+    // item.reporter_email = the finder's email (from the JOIN query)
+    // currentUser.gsuite  = the logged-in user's email
+    const isTheFinder = currentUser.gsuite === item.reporter_email;
+    const isAdmin     = currentUser.role === 'admin';
+
+    // Situations B & C: Show the review panel
+    if (isTheFinder || isAdmin) {
+        loadReviewSection(item);
+        return;
+    }
+
+    // Item is already returned — no more claims possible
+    if (item.status === 'Returned') {
+        section.innerHTML = `
+            <div class="alert alert-secondary">
+                This item has already been returned to its owner.
+            </div>`;
+        return;
+    }
+
+    // Situation D: Regular user — show the claim form
+    showClaimForm();
+}
+
+
+// ══════════════════════════════════════════════════════
+// PART 5 — SHOW THE CLAIM FORM
+// Only regular users (not the finder) see this
+// ══════════════════════════════════════════════════════
+function showClaimForm() {
+    document.getElementById('action-section').innerHTML = `
+        <div class="card border-success shadow-sm">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">🙋 Claim This Item</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">
+                    If this is your item, submit a claim. 
+                    Upload any proof of ownership — a photo, receipt, or document.
+                    The finder will review your claim.
+                </p>
+
+                <!-- 
+                    This div shows success or error messages after submission
+                    It starts empty and gets filled by submitClaim()
+                -->
+                <div id="claim-message"></div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">
+                        Proof of Ownership 
+                        <span class="text-muted fw-normal">(optional but recommended)</span>
+                    </label>
+                    <!--
+                        type="file"    → shows a file picker button
+                        multiple       → allows selecting more than one file
+                        accept="..."   → limits which file types show in the picker
+                                         image/* = any image format
+                    -->
+                    <input 
+                        type="file" 
+                        id="proof-files" 
+                        class="form-control" 
+                        multiple
+                        accept="image/*,video/mp4,application/pdf"
+                    >
+                    <small class="text-muted">
+                        Max 5 files · Max 10MB each · JPG, PNG, MP4, PDF allowed
+                    </small>
+                </div>
+
+                <button 
+                    id="claim-btn"
+                    onclick="submitClaim()" 
+                    class="btn btn-success px-4">
+                    Submit Claim
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+
+// ══════════════════════════════════════════════════════
+// PART 6 — SUBMIT THE CLAIM
+// Runs when user clicks Submit Claim button
+// ══════════════════════════════════════════════════════
+async function submitClaim() {
+    const msgDiv = document.getElementById('claim-message');
+    const btn    = document.getElementById('claim-btn');
+
+    // Disable button immediately so user cannot double-click
+    btn.disabled = true;
+    btn.textContent = 'Submitting...';
+    msgDiv.innerHTML = '';
+
+    // ── Build FormData ──────────────────────────────────
+    // FormData is a special container that can hold BOTH
+    // text values AND binary file data at the same time
+    //
+    // Why not JSON?
+    // JSON is plain text. You cannot put a file inside text.
+    // FormData is like a physical envelope — it can contain
+    // both a written note (found_id) and a photo (the file)
+    const formData = new FormData();
+
+    // Add found_id as a text field
+    // This tells the backend WHICH item we are claiming
+    formData.append('found_id', found_id);
+
+    // Get the selected files from the file input element
+    const fileInput = document.getElementById('proof-files');
+
+    // fileInput.files is a FileList — loop through each file
+    // and add it to formData under the key 'proof_files'
+    // 'proof_files' must match upload.array('proof_files', 5) in the route
+    for (let i = 0; i < fileInput.files.length; i++) {
+        formData.append('proof_files', fileInput.files[i]);
+    }
+
+    // ── Send to backend ─────────────────────────────────
+    try {
+        const res = await fetch('/api/claims', {
+            method: 'POST',
+            credentials: 'include',
+            // ⚠️ VERY IMPORTANT: Do NOT add Content-Type header here
+            // When you use FormData, the browser automatically sets
+            // Content-Type to 'multipart/form-data' AND adds a
+            // special "boundary" value that separates each field
+            // If you manually set Content-Type, that boundary is
+            // missing and the server cannot parse the files at all
+            body: formData
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            msgDiv.innerHTML = `
+                <div class="alert alert-success mt-3">
+                    ✅ Claim submitted successfully!
+                    ${data.files_uploaded > 0 
+                        ? `${data.files_uploaded} proof file(s) uploaded.` 
+                        : 'No files uploaded.'}
+                    <br>
+                    <strong>Status: Pending</strong> — the finder will review your claim.
+                    <br>
+                    <a href="my-claims.html" class="alert-link">View your claims →</a>
+                </div>`;
+            // Keep button disabled — they already submitted
+        } else {
+            msgDiv.innerHTML = `
+                <div class="alert alert-danger mt-3">${data.message}</div>`;
+            // Re-enable button so they can try again
+            btn.disabled = false;
+            btn.textContent = 'Submit Claim';
+        }
+
+    } catch (err) {
+        msgDiv.innerHTML = `
+            <div class="alert alert-danger mt-3">
+                Network error. Check your internet and try again.
+            </div>`;
+        btn.disabled = false;
+        btn.textContent = 'Submit Claim';
+    }
+}
+
+
+// ══════════════════════════════════════════════════════
+// PART 7 — LOAD THE REVIEW SECTION
+// Only the finder and admins reach this function
+// Shows all claims on this item + approve/reject buttons
+// ══════════════════════════════════════════════════════
+async function loadReviewSection(item) {
+    const section = document.getElementById('action-section');
+    section.innerHTML = '<p class="text-muted">Loading claims...</p>';
+
+    try {
+        const res = await fetch(`/api/claims/found/${found_id}`, {
+            credentials: 'include'
+        });
+
+        const claims = await res.json();
+
+        if (!res.ok) {
+            section.innerHTML = 
+                `<div class="alert alert-danger">${claims.message}</div>`;
+            return;
+        }
+
+        // No claims submitted yet
+        if (claims.length === 0) {
+            section.innerHTML = `
+                <div class="alert alert-info">
+                    No one has claimed this item yet.
+                </div>`;
+            return;
+        }
+
+        // ── Build HTML for each claim ───────────────────
+        let html = `<h4 class="mb-3">📋 Claims on This Item 
+                        <span class="badge bg-secondary">${claims.length}</span>
+                    </h4>`;
+
+        for (const claim of claims) {
+
+            // Build the proof files section for this claim
+            let filesHTML = '';
+            if (claim.proof_files && claim.proof_files.length > 0) {
+
+                filesHTML = `<div class="mt-3">
+                    <strong>Proof Files:</strong>
+                    <div class="d-flex flex-wrap gap-2 mt-2">`;
+
+                for (const file of claim.proof_files) {
+                    if (file.media_type === 'image') {
+                        // Show a clickable thumbnail for images
+                        // The file_url stored in DB is like "uploads/123.jpg"
+                        // We add "/" at the start to make it an absolute URL path
+                        // So the browser looks for /uploads/123.jpg on our server
+                        // which works because we added the static middleware in server.js
+                        filesHTML += `
+                            <a href="/${file.file_url}" target="_blank" title="Click to view full size">
+                                <img 
+                                    src="/${file.file_url}" 
+                                    style="height:90px; width:90px; object-fit:cover; border-radius:8px; border:1px solid #ddd;"
+                                >
+                            </a>`;
+                    } else {
+                        // For documents and videos, show a download link
+                        const icon = file.media_type === 'video' ? '🎥' : '📄';
+                        filesHTML += `
+                            <a href="/${file.file_url}" target="_blank" 
+                               class="btn btn-outline-secondary btn-sm">
+                                ${icon} View ${file.media_type}
+                            </a>`;
+                    }
+                }
+
+                filesHTML += `</div></div>`;
+
+            } else {
+                filesHTML = `<p class="text-muted small mt-2 mb-0">
+                    No proof files attached to this claim.
+                </p>`;
+            }
+
+            // Badge color for the claim's own status
+            const claimBadge = { 
+                'Pending':  'warning', 
+                'Approved': 'success', 
+                'Rejected': 'danger' 
+            };
+
+            // Show approve/reject buttons ONLY if:
+            // - This particular claim is still Pending (not already decided)
+            // - The overall item is not already Returned (case not closed)
+            let actionButtons = '';
+            if (claim.status === 'Pending' && item.status !== 'Returned') {
+                actionButtons = `
+                    <div class="mt-3 pt-3 border-top">
+                        <button 
+                            onclick="reviewClaim(${claim.claim_id}, 'Approved')" 
+                            class="btn btn-success btn-sm me-2">
+                            ✅ Approve this claim
+                        </button>
+                        <button 
+                            onclick="reviewClaim(${claim.claim_id}, 'Rejected')" 
+                            class="btn btn-outline-danger btn-sm">
+                            ❌ Reject this claim
+                        </button>
+                    </div>`;
+            }
+
+            // If the claim was already reviewed, show the review note
+            let reviewInfo = '';
+            if (claim.status !== 'Pending' && claim.review_notes) {
+                reviewInfo = `
+                    <p class="mb-0 mt-2 small text-muted">
+                        <strong>Review note:</strong> ${claim.review_notes}
+                    </p>`;
+            }
+
+            html += `
+                <div class="card shadow-sm mb-3">
+                    <div class="card-body">
+
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong class="fs-6">${claim.claimant_name}</strong>
+                                <span class="text-muted small ms-2">${claim.claimant_email}</span>
+                            </div>
+                            <span class="badge bg-${claimBadge[claim.status] || 'secondary'}">
+                                ${claim.status}
+                            </span>
+                        </div>
+
+                        <p class="text-muted small mb-0 mt-1">
+                            Submitted: ${new Date(claim.claim_date).toLocaleString()}
+                        </p>
+
+                        ${reviewInfo}
+                        ${filesHTML}
+                        ${actionButtons}
+
+                    </div>
+                </div>`;
+        }
+
+        section.innerHTML = html;
+
+    } catch (err) {
+        console.error(err);
+        section.innerHTML = 
+            '<div class="alert alert-danger">Failed to load claims.</div>';
+    }
+}
+
+
+// ══════════════════════════════════════════════════════
+// PART 8 — APPROVE OR REJECT A CLAIM
+// Runs when finder/admin clicks Approve or Reject
+// ══════════════════════════════════════════════════════
+async function reviewClaim(claim_id, decision) {
+
+    // prompt() is a built-in browser popup that accepts text input
+    // We use it here to collect an optional review note
+    const notes = prompt(
+        `You are about to ${decision} this claim.\n\nAdd a review note (optional — press OK to skip):`
+    );
+
+    // If the user pressed Cancel on the prompt, notes === null
+    // We treat Cancel as "I changed my mind, don't proceed"
+    if (notes === null) return;
+
+    try {
+        const res = await fetch(`/api/claims/${claim_id}/review`, {
+            method: 'PUT',
+            headers: { 
+                'Content-Type': 'application/json'
+                // Here we CAN set Content-Type manually because we are
+                // sending plain JSON (no files) — unlike the claim submission
+            },
+            credentials: 'include',
+            body: JSON.stringify({ 
+                decision:     decision, 
+                review_notes: notes || null
+                // If notes is an empty string "", send null instead
+                // so the database stores NULL not an empty string
+            })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            alert(`✅ ${data.message}`);
+            // Reload the page so all statuses update visually
+            window.location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+
+    } catch (err) {
+        alert('Network error. Try again.');
+    }
+}
+
+
+// ══════════════════════════════════════════════════════
+// LOGOUT
+// ══════════════════════════════════════════════════════
+async function logout() {
+    await fetch('/api/auth/logout', { 
+        method: 'POST', 
+        credentials: 'include' 
+    });
+    window.location.href = 'login.html';
+}
+
+
+// ══════════════════════════════════════════════════════
+// START — Run loadPage() as soon as this script loads
+// ══════════════════════════════════════════════════════
+loadPage();
+
+</script>
+</body>
+</html>

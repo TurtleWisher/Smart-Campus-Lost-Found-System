@@ -2,6 +2,8 @@
 // Every time we need to talk to MySQL we use this
 const db = require('../config/db');
 
+const { runMatchingForLostItem } = require('./matchController');
+
 // =============================================
 // GET ALL LOST ITEMS
 // Route: GET /api/lost-items
@@ -136,9 +138,19 @@ exports.createLostItem = async (req, res) => {
         // of the row that was just created
         // Very useful to send back so the frontend
         // knows the ID of the newly created item
+        const newLostId = result.insertId;
+
+        // Auto-trigger matching in the background
+        // We use .catch() so if matching fails, it does NOT
+        // crash the whole response — the item is still saved
+        // The user still gets their success message either way
+        runMatchingForLostItem(newLostId).catch(err =>
+            console.error('Auto-matching error:', err)
+        );
+
         res.status(201).json({ 
             message: 'Lost item reported successfully',
-            lost_id: result.insertId
+            lost_id: newLostId
         });
 
     } catch (err) {

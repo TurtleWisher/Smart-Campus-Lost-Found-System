@@ -1,5 +1,7 @@
 const db = require('../config/db');
 
+const { runMatchingForFoundItem } = require('./matchController');
+
 // =============================================
 // GET ALL FOUND ITEMS
 // Route: GET /api/found-items
@@ -120,9 +122,16 @@ exports.createFoundItem = async (req, res) => {
                 (?, ?, ?, ?, ?, ?)
         `, [user_id, category_id, location_id, title, description, date_found]);
 
+       const newFoundId = result.insertId;
+
+        // Auto-trigger matching in the background
+        runMatchingForFoundItem(newFoundId).catch(err =>
+            console.error('Auto-matching error:', err)
+        );
+
         res.status(201).json({ 
             message: 'Found item reported successfully',
-            found_id: result.insertId
+            found_id: newFoundId
         });
 
     } catch (err) {
@@ -153,7 +162,7 @@ exports.updateFoundItem = async (req, res) => {
         // First find the item to verify it exists
         // and check who owns it
         const [rows] = await db.query(
-            'SELECT * FROM found_items WHERE found_id = ?', 
+            'SELECT * FROM found_items WHERE found_id = ?',
             [req.params.id]
         );
 

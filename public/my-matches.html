@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Matches - BRACU Lost & Found</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Color-coded confidence bar */
+        .score-bar {
+            height: 10px;
+            border-radius: 5px;
+            background: #e9ecef;
+            overflow: hidden;
+        }
+        .score-fill {
+            height: 100%;
+            border-radius: 5px;
+            /* Color changes based on score:
+               green = high confidence, yellow = medium, red = low */
+            background: linear-gradient(90deg, #dc3545, #ffc107, #28a745);
+            background-size: 300% 100%;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-dark bg-primary mb-4">
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="index.html">BRACU Lost & Found</a>
+        <div>
+            <a href="lost-items.html" class="btn btn-outline-light btn-sm me-2">
+                Lost Items
+            </a>
+            <a href="found-items.html" class="btn btn-outline-light btn-sm me-2">
+                Found Items
+            </a>
+            <button onclick="logout()" class="btn btn-light btn-sm">Logout</button>
+        </div>
+    </div>
+</nav>
+
+<div class="container pb-5">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">🔍 My Match Suggestions</h2>
+        <small class="text-muted">
+            Suggestions are auto-generated based on category, location, and keywords
+        </small>
+    </div>
+
+    <!-- Filled by JavaScript -->
+    <div id="matches-container">
+        <p class="text-muted">Loading suggestions...</p>
+    </div>
+
+</div>
+
+<script>
+
+// ══════════════════════════════════════════════════════
+// LOAD ALL MATCH SUGGESTIONS FOR THE LOGGED-IN USER
+// ══════════════════════════════════════════════════════
+async function loadMyMatches() {
+    const container = document.getElementById('matches-container');
+
+    try {
+        const res = await fetch('/api/matches/my-matches', {
+            credentials: 'include'
+            // Sends the session cookie so server knows who we are
+        });
+
+        // Not logged in
+        if (res.status === 401) {
+            container.innerHTML = `
+                <div class="alert alert-warning">
+                    Please <a href="login.html">log in</a> to view your match suggestions.
+                </div>`;
+            return;
+        }
+
+        const matches = await res.json();
+
+        // No suggestions at all
+        if (matches.length === 0) {
+            container.innerHTML = `
+                <div class="alert alert-info">
+                    <strong>No match suggestions yet.</strong><br>
+                    Suggestions appear automatically when the system finds a found item
+                    that looks similar to one of your lost items.
+                    <br><br>
+                    Make sure you have reported your lost item first:
+                    <a href="lost-items.html" class="alert-link">Report Lost Item →</a>
+                </div>`;
+            return;
+        }
+
+        // ── Group matches by lost item ──────────────────
+        // A single lost item might have MULTIPLE found item suggestions
+        // We group them so they display together under one heading
+        // Example structure after grouping:
+        // {
+        //   "Black Samsung Phone (lost_id=1)": [match1, match2],
+        //   "Blue Bag (lost_id=3)": [match3]
+        // }
+        const grouped = {};
+        for (const match of matches) {
+            const key = match.lost_id; // group by lost item ID
+            if (!grouped[key]) {
+                grouped[key] = {
+                    lost_title: match.lost_title,
+                    lost_description: match.lost_description,
+                    date_lost: match.date_lost,
+                    suggestions: []
+                };
+            }
+            grouped[key].suggestions.push(match);
+        }
+
+        // ── Build HTML for each group ───────────────────
+        let html = '';
+
+        for (const lost_id in grouped) {
+            const group = grouped[lost_id];
+
+            // Header for this lost item's group
+            html += `
+                <div class="mb-5">
+                    <h5 class="text-danger mb-1">
+                        📌 Your Lost Item: ${group.lost_title}
+                    </h5>
+                    <p class="text-muted small mb-3">
+                        Lost on: ${group.date_lost} · 
+                        "${group.lost_description || 'No description'}"
+                    </p>
+            `;
+
+            // Each suggestion card for this lost item
+            for (const match of group.suggestions) {
+
+                // Build location string for the found item
+                let foundLocation = '';
+                if (match.found_misc_location) {
+                    foundLocation = match.found_misc_location;
+                } else {
+                    foundLocation = `Floor ${match.found_floor}`;
+                    if (match.found_zone) foundLocation += `, Zone ${match.found_zone}`;
+                }
+
+                // Match score as a percentage for display
+                // score is stored as decimal e.g. 70.00
+                const scoreNum  = parseFloat(match.match_score);
+                const scorePercent = Math.round(scoreNum);
+
+                // Pick a color label based on confidence
+                let confidenceLabel = '';
+                let confidenceColor = '';
+                if (scorePercent >= 70) {
+                    confidenceLabel = 'High Confidence';
+                    confidenceColor = 'success';
+                } else if (scorePercent >= 50) {
+                    confidenceLabel = 'Medium Confidence';
+                    confidenceColor = 'warning';
+                } else {
+                    confidenceLabel = 'Low Confidence';
+                    confidenceColor = 'danger';
+                }
+
+                // Status badge for this specific match suggestion
+                const statusBadge = {
+                    'Suggested':  'secondary',
+                    'Confirmed':  'success',
+                    'Rejected':   'danger'
+                };
+
+                // Show action buttons only for 'Suggested' status
+                // Once confirmed or rejected, no need for buttons
+                let actionButtons = '';
+                if (match.match_status === 'Suggested') {
+                    actionButtons = `
+                        <div class="d-flex gap-2 mt-3">
+                            <button 
+                                onclick="updateStatus(${match.match_id}, 'Confirmed')"
+                                class="btn btn-success btn-sm">
+                                ✅ Yes, this is mine!
+                            </button>
+                            <button 
+                                onclick="updateStatus(${match.match_id}, 'Rejected')"
+                                class="btn btn-outline-danger btn-sm">
+                                ❌ Not my item
+                            </button>
+                        </div>
+                        <small class="text-muted d-block mt-2">
+                            If you confirm, visit the 
+                            <a href="found-item-detail.html?id=${match.found_id}">
+                                found item page
+                            </a> 
+                            to submit an official claim.
+                        </small>`;
+                }
+
+                html += `
+                    <div class="card shadow-sm mb-3 
+                         ${match.match_status === 'Rejected' ? 'opacity-50' : ''}">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span>
+                                <span class="badge bg-${confidenceColor} me-2">
+                                    ${confidenceLabel}
+                                </span>
+                                Match Score: <strong>${scorePercent}%</strong>
+                            </span>
+                            <span class="badge bg-${statusBadge[match.match_status] || 'secondary'}">
+                                ${match.match_status}
+                            </span>
+                        </div>
+
+                        <div class="card-body">
+
+                            <!-- Visual score bar -->
+                            <div class="score-bar mb-3">
+                                <div class="score-fill" 
+                                     style="width: ${scorePercent}%; 
+                                            background-position: ${100 - scorePercent}% 0;">
+                                </div>
+                            </div>
+
+                            <!-- Side-by-side comparison -->
+                            <div class="row">
+
+                                <!-- LEFT: The found item that might be a match -->
+                                <div class="col-md-8">
+                                    <h6 class="text-success">
+                                        🔎 Possible Match Found:
+                                    </h6>
+                                    <p class="mb-1">
+                                        <strong>${match.found_title}</strong>
+                                    </p>
+                                    <p class="text-muted small mb-1">
+                                        ${match.found_description || 'No description'}
+                                    </p>
+                                    <p class="text-muted small mb-1">
+                                        📍 ${foundLocation}
+                                    </p>
+                                    <p class="text-muted small mb-1">
+                                        📅 Found on: ${match.date_found}
+                                    </p>
+                                    <p class="text-muted small mb-0">
+                                        👤 Found by: 
+                                        <strong>${match.finder_name}</strong> 
+                                        (${match.finder_email})
+                                    </p>
+                                </div>
+
+                                <!-- RIGHT: Link to the found item page -->
+                                <div class="col-md-4 d-flex align-items-center 
+                                            justify-content-center mt-3 mt-md-0">
+                                    <a href="found-item-detail.html?id=${match.found_id}" 
+                                       class="btn btn-outline-success" 
+                                       target="_blank">
+                                        View Found Item →
+                                    </a>
+                                </div>
+
+                            </div>
+
+                            ${actionButtons}
+
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `</div>`; // close the group div
+        }
+
+        container.innerHTML = html;
+
+    } catch (err) {
+        console.error(err);
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                Failed to load matches. Is your server running?
+            </div>`;
+    }
+}
+
+// ══════════════════════════════════════════════════════
+// CONFIRM OR REJECT A MATCH SUGGESTION
+// Runs when user clicks "Yes, this is mine!" or "Not mine"
+// ══════════════════════════════════════════════════════
+async function updateStatus(match_id, status) {
+    try {
+        const res = await fetch(`/api/matches/${match_id}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ status })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            // Reload the page to show updated statuses
+            loadMyMatches();
+        } else {
+            alert('Error: ' + data.message);
+        }
+
+    } catch (err) {
+        alert('Network error. Try again.');
+    }
+}
+
+// ══════════════════════════════════════════════════════
+// LOGOUT
+// ══════════════════════════════════════════════════════
+async function logout() {
+    await fetch('/api/auth/logout', { 
+        method: 'POST', 
+        credentials: 'include' 
+    });
+    window.location.href = 'login.html';
+}
+
+// ══════════════════════════════════════════════════════
+// START
+// ══════════════════════════════════════════════════════
+loadMyMatches();
+
+</script>
+</body>
+</html>

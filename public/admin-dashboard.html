@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - BRACU Lost & Found</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Make the stat cards look clean */
+        .stat-card {
+            border-left: 4px solid;
+            border-radius: 8px;
+        }
+        .stat-card.blue   { border-color: #0d6efd; }
+        .stat-card.red    { border-color: #dc3545; }
+        .stat-card.green  { border-color: #198754; }
+        .stat-card.yellow { border-color: #ffc107; }
+        .stat-card.purple { border-color: #6f42c1; }
+        .stat-card.teal   { border-color: #0dcaf0; }
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+        /* Sticky table header so column names stay visible when scrolling */
+        .table-container {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .table-container thead th {
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-dark bg-dark mb-4">
+    <div class="container-fluid">
+        <span class="navbar-brand fw-bold">
+            🛡️ BRACU Lost & Found — Admin Panel
+        </span>
+        <div>
+            <a href="index.html" class="btn btn-outline-light btn-sm me-2">
+                ← Back to Site
+            </a>
+            <button onclick="logout()" class="btn btn-danger btn-sm">
+                Logout
+            </button>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid px-4 pb-5">
+
+    <!--
+        ACCESS GUARD MESSAGE
+        This div is shown while we check if the user is an admin.
+        If they are not, we show an error and hide everything else.
+        If they are, we hide this and show the real dashboard.
+    -->
+    <div id="access-check" class="text-center py-5">
+        <p class="text-muted">Verifying admin access...</p>
+    </div>
+
+    <!--
+        THE REAL DASHBOARD
+        Hidden by default. Shown only after confirming the user is admin.
+    -->
+    <div id="dashboard-content" style="display:none;">
+
+        <h3 class="mb-4">Welcome, <span id="admin-name"></span> 👋</h3>
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- BOOTSTRAP TABS — Navigation between sections -->
+        <!-- ═══════════════════════════════════════════ -->
+        <ul class="nav nav-tabs mb-4" id="adminTabs">
+            <!--
+                data-tab="analytics" is our own custom attribute
+                We use it in JavaScript to know which tab was clicked
+                and which data loading function to call
+            -->
+            <li class="nav-item">
+                <a class="nav-link active" href="#" 
+                   data-tab="analytics" onclick="switchTab(this)">
+                    📊 Analytics
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" 
+                   data-tab="users" onclick="switchTab(this)">
+                    👥 Users
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" 
+                   data-tab="claims" onclick="switchTab(this)">
+                    📋 Claims
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" 
+                   data-tab="lost" onclick="switchTab(this)">
+                    🔴 Lost Items
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" 
+                   data-tab="found" onclick="switchTab(this)">
+                    🟢 Found Items
+                </a>
+            </li>
+        </ul>
+
+        <!-- Tab content area — filled by JavaScript -->
+        <div id="tab-content">
+            <p class="text-muted">Loading...</p>
+        </div>
+
+    </div><!-- end dashboard-content -->
+
+</div><!-- end container -->
+
+<script>
+
+// ══════════════════════════════════════════════════════
+// STEP A: VERIFY THE USER IS AN ADMIN
+//
+// The very first thing this page does is check
+// if the logged-in user is an admin.
+//
+// Why check on the frontend too?
+// The backend already blocks non-admins from the API.
+// But without this frontend check, a non-admin would
+// just see a blank page with no explanation.
+// This gives them a clear "Access Denied" message.
+// ══════════════════════════════════════════════════════
+async function verifyAdminAccess() {
+    try {
+        const res = await fetch('/api/auth/me', {
+            credentials: 'include'
+        });
+
+        // Not logged in
+        if (!res.ok) {
+            document.getElementById('access-check').innerHTML = `
+                <div class="alert alert-warning d-inline-block">
+                    You must <a href="login.html">log in</a> to access this page.
+                </div>`;
+            return;
+        }
+
+        const user = await res.json();
+
+        // Logged in but not admin
+        if (user.role !== 'admin') {
+            document.getElementById('access-check').innerHTML = `
+                <div class="alert alert-danger d-inline-block">
+                    <strong>Access Denied.</strong><br>
+                    You do not have admin privileges.
+                    <br><br>
+                    <a href="index.html" class="btn btn-secondary btn-sm">
+                        Go Back to Site
+                    </a>
+                </div>`;
+            return;
+        }
+
+        // ── User is a valid admin ─────────────────────
+        // Hide the checking message
+        document.getElementById('access-check').style.display = 'none';
+        // Show the real dashboard
+        document.getElementById('dashboard-content').style.display = 'block';
+        // Show their name in the greeting
+        document.getElementById('admin-name').textContent = user.name;
+
+        // Load the default tab (Analytics) on page load
+        loadAnalytics();
+
+    } catch (err) {
+        document.getElementById('access-check').innerHTML = `
+            <div class="alert alert-danger d-inline-block">
+                Server error. Is your server running?
+            </div>`;
+    }
+}
+
+// ══════════════════════════════════════════════════════
+// STEP B: HANDLE TAB SWITCHING
+//
+// When the user clicks a tab, we:
+// 1. Mark that tab as visually active (bold underline)
+// 2. Call the correct data-loading function
+//
+// We use event.preventDefault() to stop the link
+// from navigating away — we handle the click ourselves
+// ══════════════════════════════════════════════════════
+function switchTab(clickedLink) {
+    event.preventDefault();
+
+    // Remove 'active' class from all tabs
+    document.querySelectorAll('#adminTabs .nav-link')
+        .forEach(link => link.classList.remove('active'));
+
+    // Add 'active' class to the clicked tab
+    clickedLink.classList.add('active');
+
+    // Read our custom data-tab attribute to know which tab was clicked
+    const tab = clickedLink.getAttribute('data-tab');
+
+    // Show loading message while data fetches
+    document.getElementById('tab-content').innerHTML =
+        '<p class="text-muted">Loading...</p>';
+
+    // Call the matching load function
+    if (tab === 'analytics') loadAnalytics();
+    if (tab === 'users')     loadUsers();
+    if (tab === 'claims')    loadClaims();
+    if (tab === 'lost')      loadLostItems();
+    if (tab === 'found')     loadFoundItems();
+}
+
+// ══════════════════════════════════════════════════════
+// TAB 1: ANALYTICS
+// Shows count cards — the numbers overview
+// ══════════════════════════════════════════════════════
+async function loadAnalytics() {
+    try {
+        const res = await fetch('/api/admin/analytics', {
+            credentials: 'include'
+        });
+        const data = await res.json();
+
+        // Each card shows one number from the analytics response
+        // The stat-card CSS class adds the colored left border
+        document.getElementById('tab-content').innerHTML = `
+
+            <h5 class="mb-4 text-muted">System Overview</h5>
+
+            <div class="row g-3 mb-5">
+
+                <div class="col-md-4 col-lg-2">
+                    <div class="card stat-card blue p-3 h-100">
+                        <div class="stat-number text-primary">
+                            ${data.total_users}
+                        </div>
+                        <div class="text-muted small mt-1">Total Users</div>
+                    </div>
+                </div>
+
+                <div class="col-md-4 col-lg-2">
+                    <div class="card stat-card red p-3 h-100">
+                        <div class="stat-number text-danger">
+                            ${data.total_lost}
+                        </div>
+                        <div class="text-muted small mt-1">Lost Reports</div>
+                    </div>
+                </div>
+
+                <div class="col-md-4 col-lg-2">
+                    <div class="card stat-card red p-3 h-100">
+                        <div class="stat-number text-danger">
+                            ${data.active_lost}
+                        </div>
+                        <div class="text-muted small mt-1">Still Lost</div>
+                    </div>
+                </div>
+
+                <div class="col-md-4 col-lg-2">
+                    <div class="card stat-card teal p-3 h-100">
+                        <div class="stat-number text-info">
+                            ${data.total_found}
+                        </div>
+                        <div class="text-muted small mt-1">Found Reports</div>
+                    </div>
+                </div>
+
+                <div class="col-md-4 col-lg-2">
+                    <div class="card stat-card yellow p-3 h-100">
+                        <div class="stat-number text-warning">
+                            ${data.pending_claims}
+                        </div>
+                        <div class="text-muted small mt-1">Pending Claims</div>
+                    </div>
+                </div>
+
+                <div class="col-md-4 col-lg-2">
+                    <div class="card stat-card green p-3 h-100">
+                        <div class="stat-number text-success">
+                            ${data.returned_items}
+                        </div>
+                        <div class="text-muted small mt-1">Items Returned</div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!--
+                Success rate calculation:
+                returned / total_lost * 100 = what % of lost items
+                were successfully returned to their owners
+                toFixed(1) rounds to 1 decimal place: 66.666 → 66.7
+            -->
+            <div class="card p-4 shadow-sm">
+                <h6 class="text-muted mb-3">Recovery Rate</h6>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="progress flex-grow-1" style="height: 20px;">
+                        <div class="progress-bar bg-success" 
+                             style="width: ${data.total_lost > 0 
+                                ? ((data.returned_items / data.total_lost) * 100).toFixed(1) 
+                                : 0}%">
+                        </div>
+                    </div>
+                    <strong>
+                        ${data.total_lost > 0 
+                            ? ((data.returned_items / data.total_lost) * 100).toFixed(1) 
+                            : 0}%
+                    </strong>
+                </div>
+                <small class="text-muted mt-2">
+                    ${data.returned_items} of ${data.total_lost} lost items successfully returned
+                </small>
+            </div>
+
+            <div class="card p-3 mt-3 shadow-sm d-inline-block">
+                <span class="text-muted me-2">Match Suggestions Generated:</span>
+                <strong class="text-primary">${data.total_matches}</strong>
+            </div>
+        `;
+
+    } catch (err) {
+        document.getElementById('tab-content').innerHTML =
+            '<div class="alert alert-danger">Failed to load analytics.</div>';
+    }
+}
+
+// ══════════════════════════════════════════════════════
+// TAB 2: MANAGE USERS
+// Shows all users in a table with role toggle buttons
+// ══════════════════════════════════════════════════════
+async function loadUsers() {
+    try {
+        const res = await fetch('/api/admin/users', {
+            credentials: 'include'
+        });
+        const users = await res.json();
+
+        // Get current admin's own ID so we hide
+        // the role toggle button on their own row
+        const meRes = await fetch('/api/auth/me', { 
+            credentials: 'include' 
+        });
+        const me = await meRes.json();
+
+        let rows = '';
+        for (const user of users) {
+
+            // Build the action button
+            // If this row IS the current admin: show a disabled label
+            // If this is a general_user: show "Make Admin" button
+            // If this is another admin: show "Remove Admin" button
+            let actionBtn = '';
+            if (user.user_id === me.user_id) {
+                // Cannot change own role
+                actionBtn = `<span class="badge bg-dark">You</span>`;
+
+            } else if (user.role === 'general_user') {
+                actionBtn = `
+                    <button 
+                        onclick="updateRole(${user.user_id}, 'admin', this)"
+                        class="btn btn-outline-primary btn-sm">
+                        ⬆ Make Admin
+                    </button>`;
+            } else {
+                actionBtn = `
+                    <button 
+                        onclick="updateRole(${user.user_id}, 'general_user', this)"
+                        class="btn btn-outline-danger btn-sm">
+                        ⬇ Remove Admin
+                    </button>`;
+            }
+
+            // Role badge color
+            const roleBadge = user.role === 'admin'
+                ? 'bg-danger' 
+                : 'bg-secondary';
+
+            rows += `
+                <tr>
+                    <td>${user.user_id}</td>
+                    <td>${user.name || '—'}</td>
+                    <td>${user.gsuite}</td>
+                    <td>
+                        <span class="badge ${roleBadge}">
+                            ${user.role}
+                        </span>
+                    </td>
+                    <td>${user.student_id || '—'}</td>
+                    <td>
+                        ${new Date(user.created_at).toLocaleDateString()}
+                    </td>
+                    <td>${actionBtn}</td>
+                </tr>`;
+        }
+
+        document.getElementById('tab-content').innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">All Users 
+                    <span class="badge bg-secondary">${users.length}</span>
+                </h5>
+            </div>
+            <div class="table-container">
+                <table class="table table-hover table-bordered align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Student ID</th>
+                            <th>Joined</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>`;
+
+    } catch (err) {
+        document.getElementById('tab-content').innerHTML =
+            '<div class="alert alert-danger">Failed to load users.</div>';
+    }
+}
+
+// ══════════════════════════════════════════════════════
+// UPDATE A USER'S ROLE
+// Called when admin clicks Make Admin / Remove Admin
+//
+// btn parameter = the button element itself
+// We disable it during the request to prevent double-clicks
+// ══════════════════════════════════════════════════════
+async function updateRole(user_id, newRole, btn) {
+    // Disable the button immediately
+    btn.disabled = true;
+    btn.textContent = 'Updating...';
+
+    try {
+        const res = await fetch(`/api/admin/users/${user_id}/role`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ role: newRole })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            // Reload the users tab to show fresh data
+            // This is simpler than trying to update just one row
+            loadUsers();
+        } else {
+            alert('Error: ' + data.message);
+            btn.disabled = false;
+        }
+
+    } catch (err) {
+        alert('Network error. Try again.');
+        btn.disabled = false;
+    }
+}
+
+// ══════════════════════════════════════════════════════
+// TAB 3: ALL CLAIMS
+// Shows every claim in the system
+// ══════════════════════════════════════════════════════
+async function loadClaims() {
+    try {
+        const res = await fetch('/api/admin/claims', {
+            credentials: 'include'
+        });
+        const claims = await res.json();
+
+        if (claims.length === 0) {
+            document.getElementById('tab-content').innerHTML =
+                '<div class="alert alert-info">No claims submitted yet.</div>';
+            return;
+        }
+
+        const statusBadge = {
+            'Pending':  'bg-warning text-dark',
+            'Approved': 'bg-success',
+            'Rejected': 'bg-danger'
+        };
+
+        let rows = '';
+        for (const claim of claims) {
+            rows += `
+                <tr>
+                    <td>${claim.claim_id}</td>
+                    <td>
+                        <strong>${claim.claimant_name}</strong><br>
+                        <small class="text-muted">${claim.claimant_email}</small>
+                    </td>
+                    <td>
+                        <a href="found-item-detail.html?id=${claim.found_id}" 
+                           target="_blank" class="text-decoration-none">
+                            ${claim.item_title}
+                        </a>
+                    </td>
+                    <td>
+                        <span class="badge ${statusBadge[claim.status] || 'bg-secondary'}">
+                            ${claim.status}
+                        </span>
+                    </td>
+                    <td>${new Date(claim.claim_date).toLocaleDateString()}</td>
+                    <td>${claim.reviewer_name || '—'}</td>
+                    <td>${claim.review_notes || '—'}</td>
+                </tr>`;
+        }
+
+        document.getElementById('tab-content').innerHTML = `
+            <div class="mb-3">
+                <h5 class="mb-0">All Claims 
+                    <span class="badge bg-secondary">${claims.length}</span>
+                </h5>
+            </div>
+            <div class="table-container">
+                <table class="table table-hover table-bordered align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Claimant</th>
+                            <th>Item</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Reviewed By</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
+
+    } catch (err) {
+        document.getElementById('tab-content').innerHTML =
+            '<div class="alert alert-danger">Failed to load claims.</div>';
+    }
+}
+
+// ══════════════════════════════════════════════════════
+// TAB 4: ALL LOST ITEMS
+// ══════════════════════════════════════════════════════
+async function loadLostItems() {
+    try {
+        const res = await fetch('/api/admin/lost-items', {
+            credentials: 'include'
+        });
+        const items = await res.json();
+
+        const statusBadge = {
+            'Lost':     'bg-danger',
+            'Pending':  'bg-warning text-dark',
+            'Claimed':  'bg-info',
+            'Returned': 'bg-success'
+        };
+
+        let rows = '';
+        for (const item of items) {
+            const location = item.misc_location
+                || `Floor ${item.floor_no}${item.zone ? ' Zone ' + item.zone : ''}`;
+
+            rows += `
+                <tr>
+                    <td>${item.lost_id}</td>
+                    <td><strong>${item.title}</strong></td>
+                    <td>
+                        ${item.reporter_name}<br>
+                        <small class="text-muted">${item.reporter_email}</small>
+                    </td>
+                    <td>${item.category_name}</td>
+                    <td>${location}</td>
+                    <td>${item.date_lost}</td>
+                    <td>
+                        <span class="badge ${statusBadge[item.status] || 'bg-secondary'}">
+                            ${item.status}
+                        </span>
+                    </td>
+                </tr>`;
+        }
+
+        document.getElementById('tab-content').innerHTML = `
+            <div class="mb-3">
+                <h5 class="mb-0">All Lost Items 
+                    <span class="badge bg-secondary">${items.length}</span>
+                </h5>
+            </div>
+            <div class="table-container">
+                <table class="table table-hover table-bordered align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>Reporter</th>
+                            <th>Category</th>
+                            <th>Location</th>
+                            <th>Date Lost</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
+
+    } catch (err) {
+        document.getElementById('tab-content').innerHTML =
+            '<div class="alert alert-danger">Failed to load lost items.</div>';
+    }
+}
+
+// ══════════════════════════════════════════════════════
+// TAB 5: ALL FOUND ITEMS
+// ══════════════════════════════════════════════════════
+async function loadFoundItems() {
+    try {
+        const res = await fetch('/api/admin/found-items', {
+            credentials: 'include'
+        });
+        const items = await res.json();
+
+        const statusBadge = {
+            'Found':    'bg-primary',
+            'Pending':  'bg-warning text-dark',
+            'Returned': 'bg-success'
+        };
+
+        let rows = '';
+        for (const item of items) {
+            const location = item.misc_location
+                || `Floor ${item.floor_no}${item.zone ? ' Zone ' + item.zone : ''}`;
+
+            rows += `
+                <tr>
+                    <td>${item.found_id}</td>
+                    <td><strong>${item.title}</strong></td>
+                    <td>
+                        ${item.reporter_name}<br>
+                        <small class="text-muted">${item.reporter_email}</small>
+                    </td>
+                    <td>${item.category_name}</td>
+                    <td>${location}</td>
+                    <td>${item.date_found}</td>
+                    <td>
+                        <span class="badge ${statusBadge[item.status] || 'bg-secondary'}">
+                            ${item.status}
+                        </span>
+                    </td>
+                </tr>`;
+        }
+
+        document.getElementById('tab-content').innerHTML = `
+            <div class="mb-3">
+                <h5 class="mb-0">All Found Items 
+                    <span class="badge bg-secondary">${items.length}</span>
+                </h5>
+            </div>
+            <div class="table-container">
+                <table class="table table-hover table-bordered align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>Reporter</th>
+                            <th>Category</th>
+                            <th>Location</th>
+                            <th>Date Found</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
+
+    } catch (err) {
+        document.getElementById('tab-content').innerHTML =
+            '<div class="alert alert-danger">Failed to load found items.</div>';
+    }
+}
+
+// ══════════════════════════════════════════════════════
+// LOGOUT
+// ══════════════════════════════════════════════════════
+async function logout() {
+    await fetch('/api/auth/logout', { 
+        method: 'POST', 
+        credentials: 'include' 
+    });
+    window.location.href = 'login.html';
+}
+
+// ══════════════════════════════════════════════════════
+// START — verify admin access as soon as page loads
+// ══════════════════════════════════════════════════════
+verifyAdminAccess();
+
+</script>
+</body>
+</html>
