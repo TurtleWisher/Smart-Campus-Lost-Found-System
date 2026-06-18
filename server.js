@@ -133,6 +133,162 @@ app.get('/api/locations', async (req, res) => {
 // Read the PORT from .env file, or use 3000 as default
 const PORT = process.env.PORT || 3000;
 
+// ─── ADMIN ROUTES ────────────────────────────────────────────────────────────
+
+// Helper: check admin
+function adminOnly(req, res) {
+    if (!req.session.user || req.session.user.role !== 'admin') {
+        res.status(403).json({ message: 'Admin only' });
+        return false;
+    }
+    return true;
+}
+
+// ANALYTICS — all fields your dashboard needs
+app.get('/api/admin/analytics', async (req, res) => {
+    if (!adminOnly(req, res)) return;
+    try {
+        const db = require('./config/db');
+        const [[{ total_users }]]    = await db.query('SELECT COUNT(*) AS total_users FROM users');
+        const [[{ total_lost }]]     = await db.query('SELECT COUNT(*) AS total_lost FROM lost_items');
+        const [[{ active_lost }]]    = await db.query("SELECT COUNT(*) AS active_lost FROM lost_items WHERE status = 'Lost'");
+        const [[{ total_found }]]    = await db.query('SELECT COUNT(*) AS total_found FROM found_items');
+        const [[{ pending_claims }]] = await db.query("SELECT COUNT(*) AS pending_claims FROM claims WHERE status = 'Pending'");
+        const [[{ returned_items }]] = await db.query("SELECT COUNT(*) AS returned_items FROM found_items WHERE status = 'Returned'");
+        const [[{ total_matches }]]  = await db.query('SELECT COUNT(*) AS total_matches FROM match_suggestions');
+        const [[{ resolved }]]       = await db.query("SELECT COUNT(*) AS resolved FROM claims WHERE status = 'Approved'");
+        console.log('analytics:', { total_users, total_lost, active_lost, total_found, pending_claims, returned_items, total_matches, resolved });
+        res.json({ total_users, total_lost, active_lost, total_found, pending_claims, returned_items, total_matches, resolved });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// ALL USERS — includes student_id
+app.get('/api/admin/users', async (req, res) => {
+    if (!adminOnly(req, res)) return;
+    try {
+        const db = require('./config/db');
+        const [rows] = await db.query(
+            'SELECT user_id, name, gsuite, role, user_type, type_specific_id AS student_id, created_at FROM users ORDER BY created_at DESC'
+        );
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// UPDATE USER ROLE — Make Admin / Remove Admin
+app.put('/api/admin/users/:id/role', async (req, res) => {
+    if (!adminOnly(req, res)) return;
+    const { role } = req.body;
+    if (!['admin', 'general_user'].includes(role)) {
+        return res.status(400).json({ message: 'Invalid role' });
+    }
+    try {
+        const db = require('./config/db');
+        await db.query(
+            'UPDATE users SET role = ? WHERE user_id = ?',
+            [role, req.params.id]
+        );
+        res.json({ message: 'Role updated successfully' });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// ALL CLAIMS — includes reviewer_name
+app.get('/api/admin/claims', async (req, res) => {
+    if (!adminOnly(req, res)) return;
+    try {
+        const db = require('./config/db');
+        const [rows] = await db.query(`
+            SELECT 
+                c.claim_id,
+                c.claim_date,
+                c.status,
+                c.review_date,
+                c.review_notes,
+                c.found_id,
+                u.name  AS claimant_name,
+                u.gsuite AS claimant_email,
+                fi.title AS item_title,
+                r.name   AS reviewer_name
+            FROM claims c
+            JOIN users u        ON c.claimant_id = u.user_id
+            JOIN found_items fi  ON c.found_id   = fi.found_id
+            LEFT JOIN users r   ON c.reviewer_id = r.user_id
+            ORDER BY c.claim_date DESC
+        `);
+        res.json(rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// ALL LOST ITEMS (admin view)
+app.get('/api/admin/lost-items', async (req, res) => {
+    if (!adminOnly(req, res)) return;
+    try {
+        const db = require('./config/db');
+        const [rows] = await db.query(`
+            SELECT 
+                li.lost_id,
+                li.title,
+                li.date_lost,
+                li.date_reported,
+                li.status,
+                u.name  AS reporter_name,
+                u.gsuite AS reporter_email,
+                c.name  AS category_name,
+                l.floor_no,
+                l.zone,
+                l.room_no,
+                l.misc_location
+            FROM lost_items li
+            JOIN users u       ON li.user_id      = u.user_id
+            JOIN categories c  ON li.category_id  = c.category_id
+            JOIN locations l   ON li.location_id  = l.location_id
+            ORDER BY li.date_reported DESC
+        `);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// ALL FOUND ITEMS (admin view)
+app.get('/api/admin/found-items', async (req, res) => {
+    if (!adminOnly(req, res)) return;
+    try {
+        const db = require('./config/db');
+        const [rows] = await db.query(`
+            SELECT 
+                fi.found_id,
+                fi.title,
+                fi.date_found,
+                fi.date_reported,
+                fi.status,
+                u.name  AS reporter_name,
+                u.gsuite AS reporter_email,
+                c.name  AS category_name,
+                l.floor_no,
+                l.zone,
+                l.room_no,
+                l.misc_location
+            FROM found_items fi
+            JOIN users u       ON fi.user_id      = u.user_id
+            JOIN categories c  ON fi.category_id  = c.category_id
+            JOIN locations l   ON fi.location_id  = l.location_id
+            ORDER BY fi.date_reported DESC
+        `);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
 // This starts the server and makes it listen
 // for incoming requests on the specified port
 app.listen(PORT, () => {

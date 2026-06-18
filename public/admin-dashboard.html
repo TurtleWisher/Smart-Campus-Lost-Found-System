@@ -499,28 +499,44 @@ async function loadClaims() {
 
         let rows = '';
         for (const claim of claims) {
-            rows += `
-                <tr>
-                    <td>${claim.claim_id}</td>
-                    <td>
-                        <strong>${claim.claimant_name}</strong><br>
-                        <small class="text-muted">${claim.claimant_email}</small>
-                    </td>
-                    <td>
-                        <a href="found-item-detail.html?id=${claim.found_id}" 
-                           target="_blank" class="text-decoration-none">
-                            ${claim.item_title}
-                        </a>
-                    </td>
-                    <td>
-                        <span class="badge ${statusBadge[claim.status] || 'bg-secondary'}">
-                            ${claim.status}
-                        </span>
-                    </td>
-                    <td>${new Date(claim.claim_date).toLocaleDateString()}</td>
-                    <td>${claim.reviewer_name || '—'}</td>
-                    <td>${claim.review_notes || '—'}</td>
-                </tr>`;
+           rows += `
+    <tr>
+        <td>${claim.claim_id}</td>
+        <td>
+            <strong>${claim.claimant_name}</strong><br>
+            <small class="text-muted">${claim.claimant_email}</small>
+        </td>
+        <td>
+            <a href="item-detail.html?type=found&id=${claim.found_id}" 
+               target="_blank" class="text-decoration-none">
+                ${claim.item_title}
+            </a>
+        </td>
+        <td>
+            <span class="badge ${statusBadge[claim.status] || 'bg-secondary'}">
+                ${claim.status}
+            </span>
+        </td>
+        <td>${new Date(claim.claim_date).toLocaleDateString()}</td>
+        <td>${claim.reviewer_name || '—'}</td>
+        <td>${claim.review_notes || '—'}</td>
+        <td>
+            ${claim.status === 'Pending' ? `
+                <div class="d-flex gap-1">
+                    <button 
+                        onclick="adminReviewClaim(${claim.claim_id}, 'Approved')"
+                        class="btn btn-success btn-sm">
+                        ✅
+                    </button>
+                    <button 
+                        onclick="adminReviewClaim(${claim.claim_id}, 'Rejected')"
+                        class="btn btn-danger btn-sm">
+                        ❌
+                    </button>
+                </div>
+            ` : '<span class="text-muted small">Done</span>'}
+        </td>
+    </tr>`;
         }
 
         document.getElementById('tab-content').innerHTML = `
@@ -540,6 +556,7 @@ async function loadClaims() {
                             <th>Date</th>
                             <th>Reviewed By</th>
                             <th>Notes</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
@@ -700,6 +717,31 @@ async function logout() {
         credentials: 'include' 
     });
     window.location.href = 'login.html';
+}
+
+async function adminReviewClaim(claimId, status) {
+    const notes = status === 'Rejected'
+        ? prompt('Optional: Reason for rejection') || ''
+        : '';
+
+    try {
+        const res = await fetch(`/api/claims/${claimId}/review`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ status, review_notes: notes })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            alert(`Claim ${status} successfully.`);
+            loadClaims();
+            loadAnalytics();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (err) {
+        alert('Network error. Try again.');
+    }
 }
 
 // ══════════════════════════════════════════════════════

@@ -14,6 +14,10 @@ router.post('/run', isLoggedIn, matchController.runGlobalMatching);
 // treat "my-matches" as a match_id value
 router.get('/my-matches', isLoggedIn, matchController.getMyMatches);
 
+// GET /api/matches/lost/:id
+// Returns suggestions for one specific lost report
+router.get('/lost/:id', isLoggedIn, matchController.getMatchesForLostItem);
+
 // PUT /api/matches/:id/status
 // User confirms or rejects a specific match suggestion
 router.put('/:id/status', isLoggedIn, matchController.updateMatchStatus);

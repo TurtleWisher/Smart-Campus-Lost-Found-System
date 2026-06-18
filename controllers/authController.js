@@ -13,13 +13,13 @@ exports.register = async (req, res) => {
     // req.body contains the data sent from
     // Postman or the HTML form
     // We pull out the fields we need
-    const { name, student_id, gsuite, password } = req.body;
+    const { name, user_type, type_specific_id, gsuite, password } = req.body;
 
     // Basic check — if any required field is missing
     // send back an error immediately
-    if (!name || !gsuite || !password) {
+    if (!name || !gsuite || !password || !user_type) {
         return res.status(400).json({ 
-            message: 'Name, gsuite and password are required' 
+            message: 'Name, gsuite, user type and password are required' 
         });
     }
 
@@ -46,9 +46,9 @@ exports.register = async (req, res) => {
         // Save the new user into the database
         // Notice we save hashedPassword NOT the real password
         await db.query(
-            `INSERT INTO users (name, student_id, gsuite, password) 
-             VALUES (?, ?, ?, ?)`,
-            [name, student_id, gsuite, hashedPassword]
+            `INSERT INTO users (name, user_type, type_specific_id, gsuite, password) 
+             VALUES (?, ?, ?, ?, ?)`,
+            [name, user_type, type_specific_id, gsuite, hashedPassword]
         );
 
         // Send success response back

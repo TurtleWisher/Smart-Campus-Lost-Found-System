@@ -41,7 +41,7 @@ exports.getAnalytics = async (req, res) => {
                     AS pending_claims,
 
                 -- How many items have been successfully returned?
-                (SELECT COUNT(*) FROM lost_items WHERE status = 'Returned') 
+                (SELECT COUNT(*) FROM found_items WHERE status = 'Returned') 
                     AS returned_items,
 
                 -- How many match suggestions has the system generated?
@@ -91,6 +91,7 @@ exports.getAllUsers = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
 
 // ══════════════════════════════════════════════════════
 // UPDATE USER ROLE

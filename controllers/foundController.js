@@ -53,6 +53,7 @@ exports.getFoundItemById = async (req, res) => {
         const [rows] = await db.query(`
             SELECT 
                 fi.found_id,
+                fi.user_id,
                 fi.title,
                 fi.description,
                 fi.date_found,

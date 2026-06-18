@@ -60,6 +60,7 @@ exports.getLostItemById = async (req, res) => {
         const [rows] = await db.query(`
             SELECT 
                 li.lost_id,
+                li.user_id,
                 li.title,
                 li.description,
                 li.date_lost,
@@ -140,17 +141,19 @@ exports.createLostItem = async (req, res) => {
         // knows the ID of the newly created item
         const newLostId = result.insertId;
 
-        // Auto-trigger matching in the background
-        // We use .catch() so if matching fails, it does NOT
-        // crash the whole response — the item is still saved
-        // The user still gets their success message either way
-        runMatchingForLostItem(newLostId).catch(err =>
-            console.error('Auto-matching error:', err)
-        );
+        // Auto-trigger matching now so we can tell the user
+        // when potential matches are available immediately.
+        let newMatches = 0;
+        try {
+            newMatches = await runMatchingForLostItem(newLostId);
+        } catch (err) {
+            console.error('Auto-matching error:', err);
+        }
 
         res.status(201).json({ 
             message: 'Lost item reported successfully',
-            lost_id: newLostId
+            lost_id: newLostId,
+            new_matches: newMatches
         });
 
     } catch (err) {

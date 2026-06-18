@@ -100,8 +100,41 @@ async function checkLoginStatus() {
             // Get their info from the response
             const user = await response.json();
 
-            // Show their name and a logout button
+            // Build admin dropdown if user is admin
+            const adminMenu = user.role === 'admin' ? `
+                <div class="dropdown me-2">
+                    <button 
+                        class="btn btn-warning btn-sm dropdown-toggle" 
+                        type="button" 
+                        data-bs-toggle="dropdown">
+                        ⚙️ Admin
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <a class="dropdown-item" href="/admin-dashboard.html">
+                                📊 Admin Dashboard
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="/admin-dashboard.html#claims">
+                                📋 Pending Claims
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="/admin-dashboard.html#users">
+                                👥 All Users
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            ` : '';
+
             authDiv.innerHTML = `
+                ${adminMenu}
+                <a href="/claims.html" class="btn btn-outline-secondary btn-sm me-1">
+                    📋 My Claims
+                </a>
                 <span class="navbar-text me-2">
                     Hi, <strong>${user.name}</strong>
                 </span>

@@ -501,10 +501,16 @@
                 const data = await response.json();
 
                 if (response.ok) {
+                    const matchesText = data.new_matches > 0
+                        ? `${data.new_matches} potential match${data.new_matches === 1 ? '' : 'es'} found.`
+                        : 'No strong matches were found yet.';
+
                     showFormMessage(
-                        'Lost item reported successfully!',
+                        `Lost item reported successfully! ${matchesText} ` +
+                        `<a href="/my-matches.html" class="alert-link">View suggestions</a>`,
                         'success'
                     );
+
                     // Clear the form fields after success
                     clearForm();
                     // Reload items to show the new one

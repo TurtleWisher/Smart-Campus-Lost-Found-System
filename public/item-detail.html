@@ -62,6 +62,8 @@
                     </div>
                 </div>
 
+                <div id="match-suggestions-section"></div>
+
                 <!-- EDIT FORM -->
                 <!-- Hidden by default -->
                 <!-- Only shown when owner clicks Edit -->
@@ -213,6 +215,10 @@
                 currentItem = await response.json();
                 renderItemDetail(currentItem);
 
+                if (itemType === 'lost' && currentUser && currentUser.user_id === currentItem.user_id) {
+                    loadLostItemMatches();
+                }
+
             } catch (err) {
                 console.error('Failed to load item:', err);
             }
@@ -254,22 +260,32 @@
                             </span>
                         </div>
 
-                        <!-- EDIT/DELETE BUTTONS -->
-                        <!-- Only shown if user owns this item or is admin -->
-                        ${canModify ? `
-                            <div class="d-flex gap-2">
+                        <div class="d-flex flex-column gap-2 align-items-end">
+                            <!-- CLAIM BUTTON — shown for found items not yet claimed -->
+                            ${itemType === 'found' && item.status === 'Found' && !canModify ? `
                                 <button 
-                                    onclick="showEditForm()" 
-                                    class="btn btn-outline-primary btn-sm">
-                                    ✏️ Edit
+                                    onclick="window.location.href='/claims.html?found_id=${item.found_id}&title=${encodeURIComponent(item.title)}'"
+                                    class="btn btn-primary btn-sm px-3">
+                                    🙋 This is Mine — Claim It
                                 </button>
-                                <button 
-                                    onclick="deleteItem()" 
-                                    class="btn btn-outline-danger btn-sm">
-                                    🗑️ Delete
-                                </button>
-                            </div>
-                        ` : ''}
+                            ` : ''}
+
+                            <!-- EDIT/DELETE — only for owner or admin -->
+                            ${canModify ? `
+                                <div class="d-flex gap-2">
+                                    <button 
+                                        onclick="showEditForm()" 
+                                        class="btn btn-outline-primary btn-sm">
+                                        ✏️ Edit
+                                    </button>
+                                    <button 
+                                        onclick="deleteItem()" 
+                                        class="btn btn-outline-danger btn-sm">
+                                        🗑️ Delete
+                                    </button>
+                                </div>
+                            ` : ''}
+                        </div>
                     </div>
 
                     <!-- DETAILS -->
@@ -549,6 +565,84 @@
             if (item.zone) parts.push(`Zone ${item.zone}`);
             if (item.room_no) parts.push(`Room ${item.room_no}`);
             return parts.join(', ') || 'Location not specified';
+        }
+
+        async function loadLostItemMatches() {
+            const container = document.getElementById('match-suggestions-section');
+            container.innerHTML = `
+                <div class="card detail-card p-4 mt-4">
+                    <p class="text-muted mb-0">Loading suggested found items...</p>
+                </div>
+            `;
+
+            try {
+                const response = await fetch(`/api/matches/lost/${itemId}`, {
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    container.innerHTML = `
+                        <div class="alert alert-secondary mt-4">
+                            Could not load match suggestions for this lost item.
+                        </div>`;
+                    return;
+                }
+
+                const matches = await response.json();
+
+                if (matches.length === 0) {
+                    container.innerHTML = `
+                        <div class="alert alert-info mt-4">
+                            No match suggestions are available yet for this lost item.
+                            Check <a href="/my-matches.html">My Match Suggestions</a> after a short while.
+                        </div>`;
+                    return;
+                }
+
+                let html = `
+                    <div class="mt-4">
+                        <h5 class="fw-bold mb-3">🔎 Suggested Found Items</h5>
+                    </div>
+                `;
+
+                for (const match of matches) {
+                    const scorePercent = Math.round(parseFloat(match.match_score));
+                    const foundLocation = match.found_misc_location
+                        ? match.found_misc_location
+                        : `Floor ${match.found_floor}${match.found_zone ? ', Zone ' + match.found_zone : ''}`;
+
+                    html += `
+                        <div class="card shadow-sm mb-3">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h6 class="mb-1">${match.found_title}</h6>
+                                        <small class="text-muted">${match.found_description || 'No description provided'}</small>
+                                    </div>
+                                    <span class="badge bg-success">
+                                        ${scorePercent}% match
+                                    </span>
+                                </div>
+                                <p class="mb-1 text-muted">📍 ${foundLocation}</p>
+                                <p class="mb-1 text-muted">📅 Found on: ${new Date(match.date_found).toLocaleDateString('en-US')}</p>
+                                <p class="mb-1 text-muted">👤 Found by: ${match.finder_name} (${match.finder_email})</p>
+                                <a href="found-item-detail.html?id=${match.found_id}" class="btn btn-outline-success btn-sm" target="_blank">
+                                    View found item
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                container.innerHTML = html;
+
+            } catch (err) {
+                console.error('Error loading lost item matches:', err);
+                container.innerHTML = `
+                    <div class="alert alert-danger mt-4">
+                        Failed to load match suggestions. Please try again later.
+                    </div>`;
+            }
         }
 
         function formatDate(dateString) {

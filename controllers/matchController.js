@@ -378,6 +378,57 @@ exports.getMyMatches = async (req, res) => {
 };
 
 // ══════════════════════════════════════════════════════
+// API ROUTE FUNCTION 3: GET MATCHES FOR ONE LOST ITEM
+// Route: GET /api/matches/lost/:id
+// Who: The owner of the lost item
+//
+// Returns only suggestions for the specific lost report.
+// Helpful when a user views a lost item detail page.
+// ══════════════════════════════════════════════════════
+exports.getMatchesForLostItem = async (req, res) => {
+    const user_id = req.session.user.user_id;
+    const lost_id = req.params.id;
+
+    try {
+        const [rows] = await db.query(`
+            SELECT
+                ms.match_id,
+                ms.match_score,
+                ms.status AS match_status,
+                ms.created_at,
+
+                fi.found_id,
+                fi.title        AS found_title,
+                fi.description  AS found_description,
+                fi.date_found,
+
+                c.name          AS category_name,
+                l.floor_no      AS found_floor,
+                l.zone          AS found_zone,
+                l.misc_location AS found_misc_location,
+
+                u.name          AS finder_name,
+                u.gsuite        AS finder_email
+            FROM match_suggestions ms
+            JOIN lost_items  li ON ms.lost_id  = li.lost_id
+            JOIN found_items fi ON ms.found_id = fi.found_id
+            JOIN categories  c  ON fi.category_id = c.category_id
+            JOIN locations   l  ON fi.location_id = l.location_id
+            JOIN users       u  ON fi.user_id = u.user_id
+            WHERE ms.lost_id = ?
+              AND li.user_id = ?
+            ORDER BY ms.match_score DESC, ms.created_at DESC
+        `, [lost_id, user_id]);
+
+        res.json(rows);
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// ══════════════════════════════════════════════════════
 // API ROUTE FUNCTION 3: UPDATE MATCH STATUS
 // Route: PUT /api/matches/:id/status
 // Who: The owner of the lost item

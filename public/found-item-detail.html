@@ -346,10 +346,10 @@ async function submitClaim() {
     const fileInput = document.getElementById('proof-files');
 
     // fileInput.files is a FileList — loop through each file
-    // and add it to formData under the key 'proof_files'
-    // 'proof_files' must match upload.array('proof_files', 5) in the route
+    // and add it to formData under the key 'evidence'
+    // 'evidence' must match upload.array('evidence', 5) in the route
     for (let i = 0; i < fileInput.files.length; i++) {
-        formData.append('proof_files', fileInput.files[i]);
+        formData.append('evidence', fileInput.files[i]);
     }
 
     // ── Send to backend ─────────────────────────────────
