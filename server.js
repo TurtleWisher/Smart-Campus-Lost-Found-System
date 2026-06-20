@@ -22,8 +22,8 @@ const path = require('path');
 // Think of this as turning the restaurant open for business
 const app = express();
 
-const notificationRoutes = require('./routes/notifications');
-app.use('/notifications', notificationRoutes);
+const notificationRoutes = require('./routes/notificationRoutes');
+app.use('/api/notifications', notificationRoutes);
 
 // =============================================
 // MIDDLEWARE SECTION
@@ -64,7 +64,7 @@ app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false }
+    cookie: { secure: process.env.NODE_ENV === 'production' }
 }));
 
 // =============================================
