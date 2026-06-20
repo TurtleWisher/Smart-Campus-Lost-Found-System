@@ -25,6 +25,8 @@ const app = express();
 const notificationRoutes = require('./routes/notificationRoutes');
 app.use('/api/notifications', notificationRoutes);
 
+app.set('trust proxy', 1);
+
 // =============================================
 // MIDDLEWARE SECTION
 // Middleware are like security checkpoints that
@@ -64,7 +66,12 @@ app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: process.env.NODE_ENV === 'production' }
+    proxy: true,  // trust Railway's reverse proxy
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
 }));
 
 // =============================================
