@@ -6,101 +6,146 @@
 //    the navbar buttons accordingly
 // =============================================
 
-// This function runs automatically when called
-// It builds the navbar and adds it to the page
 async function loadNavbar() {
 
-    // First we create the navbar HTML as a string
-    // This is the same navbar that appears on every page
     const navbarHTML = `
     <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
         <div class="container">
 
-            <!-- Brand name on the left -->
-            <!-- clicking it always goes to home page -->
             <a class="navbar-brand fw-bold text-success" href="/index.html">
                 BRACU Lost & Found
             </a>
 
-            <!-- This button appears on mobile screens -->
-            <!-- It toggles the menu open/closed -->
             <button class="navbar-toggler" type="button" 
                 data-bs-toggle="collapse" 
                 data-bs-target="#navbarContent">
                 <span class="navbar-toggler-icon"></span>
             </button>
 
-            <!-- The collapsible menu content -->
             <div class="collapse navbar-collapse" id="navbarContent">
 
-                <!-- Left side links -->
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item">
-                        <a class="nav-link" href="/lost-items.html">
-                            Lost Items
-                        </a>
+                        <a class="nav-link" href="/lost-items.html">Lost Items</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/found-items.html">
-                            Found Items
-                        </a>
+                        <a class="nav-link" href="/found-items.html">Found Items</a>
                     </li>
                 </ul>
 
-                <!-- Right side buttons -->
-                <!-- This div's content changes based on login status -->
-                <div id="navbar-auth-buttons" class="d-flex gap-2">
-                    <!-- Will be filled by checkLoginStatus() below -->
+                <div id="navbar-auth-buttons" class="d-flex gap-2 align-items-center">
+                    <!-- Filled by checkLoginStatus() -->
                 </div>
 
             </div>
         </div>
     </nav>
+
+    <!-- =============================================
+         NOTIFICATION DROPDOWN STYLES
+         We define these here so they work on every
+         page without needing a separate CSS file
+    ============================================= -->
+    <style>
+        /* The bell icon wrapper — position:relative so the
+           dropdown can be positioned relative to it */
+        #notif-wrapper {
+            position: relative;
+        }
+
+        /* The red badge sitting on top of the bell icon */
+        #notif-badge {
+            position: absolute;
+            top: -4px;
+            right: -6px;
+            background: #dc3545;   /* Bootstrap danger red */
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            border-radius: 50%;
+            padding: 2px 5px;
+            line-height: 1;
+        }
+
+        /* The dropdown panel that appears when bell is clicked */
+        #notif-dropdown {
+            position: absolute;
+            right: 0;
+            top: 36px;             /* appears just below the bell */
+            width: 320px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            z-index: 9999;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        /* Each individual notification row */
+        .notif-item {
+            padding: 10px 14px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        /* Unread notifications have a light blue tint */
+        .notif-item.unread {
+            background-color: #f0f7ff;
+        }
+
+        .notif-item:hover {
+            background-color: #e8f4e8;
+        }
+
+        .notif-item p {
+            margin: 0 0 2px 0;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .notif-item span {
+            font-size: 11px;
+            color: #999;
+        }
+
+        /* Bell button — no default button styling */
+        #notif-bell {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            position: relative;
+            padding: 0 6px;
+            line-height: 1;
+        }
+    </style>
     `;
 
-    // Find the element with id="navbar-container" on the page
-    // and inject our navbar HTML into it
-    // Every HTML page will have a <div id="navbar-container"></div>
-    // at the top — that's where the navbar appears
     const container = document.getElementById('navbar-container');
     if (container) {
         container.innerHTML = navbarHTML;
     }
 
-    // After building the navbar structure
-    // check if the user is logged in
-    // and update the buttons accordingly
     await checkLoginStatus();
 }
 
 // =============================================
 // CHECK LOGIN STATUS
-// Calls GET /api/auth/me
-// If logged in → show username + logout button
-// If not logged in → show login + register buttons
 // =============================================
 async function checkLoginStatus() {
     try {
-        // fetch() sends a request to our backend
-        // GET /api/auth/me returns the logged in user
-        // or 401 if nobody is logged in
         const response = await fetch('/api/auth/me', {
-            credentials: 'include'  
-            // credentials: 'include' is CRITICAL
-            // It tells fetch to send the session cookie
-            // Without this the server won't know who you are
+            credentials: 'include'
         });
 
-        // Find the div where we put the auth buttons
         const authDiv = document.getElementById('navbar-auth-buttons');
 
         if (response.ok) {
-            // response.ok means status was 200
-            // User IS logged in
-            // Get their info from the response
             const user = await response.json();
 
-            // Build admin dropdown if user is admin
+            // Admin dropdown — only shown if role is admin
             const adminMenu = user.role === 'admin' ? `
                 <div class="dropdown me-2">
                     <button 
@@ -130,8 +175,41 @@ async function checkLoginStatus() {
                 </div>
             ` : '';
 
+            // ── NEW: Bell icon with badge + dropdown panel ──
+            // This whole block is injected only when logged in
+            // A logged-out user has no notifications to show
+            const bellHTML = `
+                <div id="notif-wrapper">
+
+                    <!-- The bell button -->
+                    <!-- onclick calls toggleNotifDropdown() defined below -->
+                    <button id="notif-bell" onclick="toggleNotifDropdown(event)" title="Notifications">
+                        🔔
+                        <!-- Red badge — hidden by default (display:none) -->
+                        <!-- loadNotifications() will show it if unread > 0 -->
+                        <span id="notif-badge" style="display:none;">0</span>
+                    </button>
+
+                    <!-- Dropdown panel — hidden by default -->
+                    <!-- toggleNotifDropdown() shows/hides this -->
+                    <div id="notif-dropdown" style="display:none;">
+                        <div style="padding:10px 14px; font-weight:600; border-bottom:1px solid #eee;">
+                            🔔 Notifications
+                        </div>
+                        <!-- Notification rows will be injected here by loadNotifications() -->
+                        <div id="notif-list">
+                            <div class="notif-item">
+                                <p style="color:#999;">Loading...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            `;
+
             authDiv.innerHTML = `
                 ${adminMenu}
+                ${bellHTML}
                 <a href="/claims.html" class="btn btn-outline-secondary btn-sm me-1">
                     📋 My Claims
                 </a>
@@ -145,53 +223,158 @@ async function checkLoginStatus() {
                 </button>
             `;
 
+            // Now that the bell HTML is in the DOM, load the notifications
+            // We call this AFTER setting innerHTML so the elements exist
+            loadNotifications();
+
         } else {
-            // User is NOT logged in
-            // Show login and register buttons
+            // Not logged in — no bell icon shown
             authDiv.innerHTML = `
-                <a href="/login.html" 
-                   class="btn btn-outline-success btn-sm">
-                    Login
-                </a>
-                <a href="/register.html" 
-                   class="btn btn-success btn-sm">
-                    Register
-                </a>
+                <a href="/login.html" class="btn btn-outline-success btn-sm">Login</a>
+                <a href="/register.html" class="btn btn-success btn-sm">Register</a>
             `;
         }
 
     } catch (err) {
-        // If fetch itself fails (server down etc.)
-        // just show the login/register buttons as default
         console.error('Could not check login status:', err);
     }
 }
 
 // =============================================
-// LOGOUT FUNCTION
-// Called when user clicks the Logout button
+// LOAD NOTIFICATIONS
+// Fetches notifications from GET /api/notifications
+// Updates the bell badge count and fills the dropdown
+// =============================================
+async function loadNotifications() {
+    try {
+        // Call our backend notifications route
+        const res = await fetch('/api/notifications', {
+            credentials: 'include' // send session cookie so server knows who we are
+        });
+
+        // If server returns error (e.g. not logged in), stop silently
+        if (!res.ok) return;
+
+        const data = await res.json();
+        // data = { notifications: [...], unreadCount: 3 }
+
+        const badge = document.getElementById('notif-badge');
+        const list  = document.getElementById('notif-list');
+
+        // ── Update the badge ───────────────────────────
+        if (data.unreadCount > 0) {
+            badge.textContent = data.unreadCount; // show the number
+            badge.style.display = 'inline';        // make it visible
+        } else {
+            badge.style.display = 'none';          // hide if no unread
+        }
+
+        // ── Fill the dropdown list ─────────────────────
+        if (data.notifications.length === 0) {
+            // No notifications at all
+            list.innerHTML = `
+                <div class="notif-item">
+                    <p style="color:#999;">No notifications yet.</p>
+                </div>
+            `;
+        } else {
+            // Build one row per notification
+            // n.is_read = 0 means unread → add 'unread' class for blue tint
+            list.innerHTML = data.notifications.map(n => `
+                <div 
+                    class="notif-item ${n.is_read == 0 ? 'unread' : ''}"
+                    onclick="markRead(${n.id}, ${n.item_id})">
+                    <p>${n.message}</p>
+                    <span>${new Date(n.created_at).toLocaleString()}</span>
+                </div>
+            `).join('');
+        }
+
+    } catch (err) {
+        // If fetch fails entirely, just log — don't crash the page
+        console.error('Failed to load notifications:', err);
+    }
+}
+
+// =============================================
+// TOGGLE NOTIFICATION DROPDOWN
+// Shows or hides the dropdown when bell is clicked
+// Also closes it when clicking anywhere else on the page
+// =============================================
+function toggleNotifDropdown(e) {
+    // Stop the click from bubbling up to document
+    // Without this, the document click listener below
+    // would immediately close the dropdown we just opened
+    e.stopPropagation();
+
+    const dropdown = document.getElementById('notif-dropdown');
+
+    // Toggle between visible and hidden
+    if (dropdown.style.display === 'none') {
+        dropdown.style.display = 'block';
+    } else {
+        dropdown.style.display = 'none';
+    }
+}
+
+// Close the dropdown if user clicks anywhere outside it
+// This is standard UX — clicking away dismisses a dropdown
+document.addEventListener('click', function(e) {
+    const wrapper  = document.getElementById('notif-wrapper');
+    const dropdown = document.getElementById('notif-dropdown');
+
+    // If the click was outside the bell wrapper, close the dropdown
+    if (wrapper && dropdown && !wrapper.contains(e.target)) {
+        dropdown.style.display = 'none';
+    }
+});
+
+// =============================================
+// MARK NOTIFICATION AS READ
+// Called when a notification row is clicked
+// Tells backend to set is_read = 1 for that notification
+// Then navigates to the related item page
+// =============================================
+async function markRead(notifId, itemId) {
+    try {
+        // Tell the backend this notification was read
+        // We use POST because we're changing data (is_read → 1)
+        await fetch(`/api/notifications/${notifId}/read`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+    } catch (err) {
+        console.error('Could not mark notification as read:', err);
+    }
+
+    // Navigate to the found item page if there's a linked item
+    // itemId comes from the notifications.item_id column
+    if (itemId && itemId !== 'null') {
+        window.location.href = `/found-item-detail.html?id=${itemId}`;
+    } else {
+        // No linked item — just reload to update the badge count
+        window.location.reload();
+    }
+}
+
+// =============================================
+// LOGOUT
 // =============================================
 async function logout() {
     try {
-        // Send logout request to backend
-        // This destroys the session on the server
         await fetch('/api/auth/logout', {
             method: 'POST',
             credentials: 'include'
         });
-
-        // After logout redirect to home page
         window.location.href = '/index.html';
-
     } catch (err) {
         console.error('Logout failed:', err);
     }
 }
 
 // =============================================
-// REDIRECT IF NOT LOGGED IN
-// Call this function on pages that REQUIRE login
-// Like the report form pages
+// REQUIRE LOGIN
+// Call on pages that need auth
 // =============================================
 async function requireLogin() {
     const response = await fetch('/api/auth/me', {
@@ -199,17 +382,11 @@ async function requireLogin() {
     });
 
     if (!response.ok) {
-        // Not logged in — redirect to login page
-        // We save the current page URL so after login
-        // we can bring them back here
         window.location.href = '/login.html';
     }
 
-    // If logged in — do nothing, let the page load normally
     return await response.json();
 }
 
-// Run loadNavbar() automatically when this script loads
-// This means every page that includes navbar.js
-// will automatically get the navbar injected
+// Auto-run when script loads
 loadNavbar();

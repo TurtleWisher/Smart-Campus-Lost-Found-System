@@ -22,6 +22,9 @@ const path = require('path');
 // Think of this as turning the restaurant open for business
 const app = express();
 
+const notificationRoutes = require('./routes/notifications');
+app.use('/notifications', notificationRoutes);
+
 // =============================================
 // MIDDLEWARE SECTION
 // Middleware are like security checkpoints that
@@ -294,3 +297,5 @@ app.get('/api/admin/found-items', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });
+
+
