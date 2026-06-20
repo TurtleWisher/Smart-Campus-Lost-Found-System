@@ -11,10 +11,11 @@ const mysql = require('mysql2');
 // Think of it as having 10 cashiers at a supermarket
 // instead of just 1 — multiple users can be served at once
 const pool = mysql.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
+    host:     process.env.DB_HOST,
+    user:     process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
+    port:     process.env.DB_PORT || 3306,
     waitForConnections: true,
     connectionLimit: 10
 });
